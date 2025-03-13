@@ -222,7 +222,7 @@ Make sure you change **MATRIXCHRONO_IP_ADDRESS** and **UNIQUEID** depending on y
 This project is licensed under the **Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0)**
 Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0)
 
-Matrix Chrono © 2025 by João Fernandes is licensed under Creative Commons Attribution-NonCommercial 4.0 International 
+MatrixChrono © 2025 by João Fernandes is licensed under Creative Commons Attribution-NonCommercial 4.0 International 
 
 To view a copy of this license, visit:
 http://creativecommons.org/licenses/by-nc/4.0/
