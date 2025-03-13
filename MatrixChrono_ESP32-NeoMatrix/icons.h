@@ -1,3 +1,12 @@
+/*
+ * MatrixChrono - IoT Smart Home Clock System
+ * Copyright (c) 2025 João Fernandes
+ * 
+ * This work is licensed under the Creative Commons Attribution-NonCommercial 
+ * 4.0 International License. To view a copy of this license, visit:
+ * http://creativecommons.org/licenses/by-nc/4.0/
+ */
+ 
 template <size_t rows, size_t cols>
 void displayIcon(uint16_t (&icon)[rows][cols], int offsetX, int offsetY) {
   for (int row = 0; row < rows; row++) {

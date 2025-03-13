@@ -1,3 +1,12 @@
+/*
+ * MatrixChrono - IoT Smart Home Clock System
+ * Copyright (c) 2025 João Fernandes
+ * 
+ * This work is licensed under the Creative Commons Attribution-NonCommercial 
+ * 4.0 International License. To view a copy of this license, visit:
+ * http://creativecommons.org/licenses/by-nc/4.0/
+ */
+
 //modified last v5.10
 const uint8_t Mini_FontBitmaps[] PROGMEM = {
   0x00, 0xFF, 0xFF, 0xF0, 0x5D, 0x00, 0xE0, 0x80, 0x2D, 0x68, 0x00, 0xF6, 
