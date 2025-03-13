@@ -12,15 +12,13 @@
 
 -   🌎 **Weather Updates**: Retrieves weather data hourly from WeatherAPI.com.
 
--   📡 **Wi-Fi Configuration**: Uses WiFiManager for easy network setup.
+-   📡 **Wi-Fi Configuration**: Uses WiFiManager for easy network setup. 
 
--   🎨 **Customizable Display**: Color selection, multiple fonts, and night mode.
-
--   📊 **Web Interface**: HTML + CSS-based configuration page with a temperature graph.
+-   📊 **[Web Interface](#-web-interface)**: HTML + CSS-based configuration page with a temperature graph. Color selection, multiple fonts, and night mode.
 
 -   🔄 **OTA Updates**: Firmware updates over-the-air for seamless upgrades.
 
--   🏡 **Home Assistant Integration**: JSON sensor output for smart home automation.
+-   🏡 **[Home Assistant Integration](#-api--home-automation-integration-homeassistant)**: JSON sensor output for smart home automation. []
 ----------
 
 ## 📖 Project History
@@ -53,8 +51,7 @@ The project supports two hardware configurations:
     -   🌙 Night mode with brightness adjustments
     -   💾 EEPROM-based persistent storage [wip]
     -   🛜 Wi-Fi portal for configuration
-    -   🌈 Gradual color changing function that rotates clock colors every hour  
-    -   
+    -   🌈 Gradual color changing function that rotates clock colors every hour
 
 ### MatrixChrono_ESP8266-MAX7219
 <img src="MatrixChrono_ESP8266-MAX7219/MatrixChrono_ESP8266-MAX7219_images/MatrixChrono_ESP8266-MAX7219_image.jpg" alt="drawing" width="400"/>
@@ -68,8 +65,7 @@ The project supports two hardware configurations:
     -   🕒 Custom timekeeping function
     -   🌙 Night mode with reduced brightness
     -   💾 EEPROM-based persistent storage
-    -   🏠Home Assistant JSON output
-        
+    -   🏠Home Assistant JSON output  
 
 ----------
 
@@ -147,29 +143,28 @@ The project supports two hardware configurations:
 ------
 ## 📜 Installation & Setup
 
-If you’d like to recreate this project, feel free to do so and contribute! This is a personal project, and while I appreciate any contributions, I can’t promise to maintain it indefinitely. While I provide the code and general instructions, I won't be providing in depth tech support. DIY project.
+If you’d like to recreate this project, feel free to do so and contribute!  
+This is a personal project, and while I appreciate any contributions, I can’t promise to maintain it indefinitely.  
+While I provide the code and general instructions, I won't be providing in depth tech support. DIY project.
 
 ### Requirements
  - Choose a specific config: **MatrixChrono_ESP32-NeoMatrix** OR **MatrixChrono_ESP8266-MAX7219**
 
  - Read the documentation inside each for specific instructions.
 
-### Configuration
-
-	-   Create a Secrets.h with your own API for weatherapi.com: "String APIKEY = XXXX"
-
-	-   Connect to the WiFi portal for initial setup.
-    
-	-   Access the web interface to customize settings.
-    
-	-   Acess webpage on the IP of the MatrixClock to check real-time temperature graphs and weather data
 
 ------
 
-## 📡 API & Home Automation Integration
+## 📡 API & Home Automation Integration (HomeAssistant)
 
 MatrixChrono provides a JSON output of sensor data, making it compatible with **Home Assistant**.  
 https://www.home-assistant.io/  
+
+example:  
+
+<img src="MatrixChrono_ESP32-NeoMatrix/MatrixChrono_ESP32-NeoMatrix_Images/Home_Assistant_data_integration.png" alt="drawing" width="1000"/>
+
+
 Configuration.yaml example:
     
 *`/homeassistant/configuration.yaml`*
@@ -220,6 +215,17 @@ For ***MatrixChrono_ESP8266-MAX7219***
 
 
 Make sure you change **MATRIXCHRONO_IP_ADDRESS** and **UNIQUEID** depending on your settings. 
+
+------
+## 🌐 Web Interface
+Acess the webpages by navigating to the IP of the MatrixChrono. The IP is shown everytime the module is started.  
+[todo: make the module accessible thru hostname address.]
+  
+<img src="MatrixChrono_ESP32-NeoMatrix/MatrixChrono_ESP32-NeoMatrix_Images/Pages.png" alt="drawing" width="800"/>  
+
+MatrixChrono_ESP32-NeoMatrix Example pages  
+
+[todo: update the pages on the MatrixChrono_ESP8266-MAX7219]
 
 ------
 ## 🔧 General Troubleshooting
