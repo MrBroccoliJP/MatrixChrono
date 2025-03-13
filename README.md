@@ -110,6 +110,8 @@ The project supports two hardware configurations:
 -   [RTClib](https://github.com/adafruit/RTClib)
     
 -   [ezTime](https://github.com/ropg/ezTime)
+  
+-   [OneWire](https://github.com/PaulStoffregen/OneWire)   
     
 -   [DallasTemperature](https://github.com/milesburton/Arduino-Temperature-Control-Library)
     
@@ -135,6 +137,8 @@ The project supports two hardware configurations:
 -   [MD_MAX72xx](https://github.com/MajicDesigns/MD_MAX72XX)
     
 -   [DHT Sensor Library](https://github.com/adafruit/DHT-sensor-library)
+
+- [OneWire](https://github.com/PaulStoffregen/OneWire)   
     
 -   [DallasTemperature](https://github.com/milesburton/Arduino-Temperature-Control-Library)
     
