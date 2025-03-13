@@ -96,15 +96,22 @@ I'll provide the code and general instructions, but I won't be offering in-depth
      - Use a shielded cable for the Neopixel signal wire OR keep the cable short.
      - Avoid routing the signal wire near antennas, coils, or other interference-prone components.  
    🚨 **Failure to follow these steps may cause erratic behavior**—such as incorrect LED colors, flickering, or other malfunctions.
+   
+2. **Library/Boards Manager Versions:**
+Make sure you set your libraries to the following versions. (Libraries without version-specific requirements are omitted.)
+- [DallasTemperature](https://github.com/milesburton/Arduino-Temperature-Control-Library): V3.9.0 [TODO: Update sketch to comply with the library changes]
+ - ESP32 by Espressif: V2.0.17 [Versions >V3 have issues with Adafruit NeoPixel and NeoMatrix libraries]
+     
 
-2. **Upload the Sketch to the ESP32**
+
+1. **Upload the Sketch to the ESP32**
 
    - Toggle the Neopixel power switch OFF before programming.
    - Connect the ESP32 to your computer via USB and verify it appears as a serial device.
    - Create a `Secrets.h` file and add your API key for WeatherAPI:  
      `String APIKEY = "YOUR_API_KEY";`
 
-3. **Power Up**
+2. **Power Up**
 
    - Remove the USB connection, slide the Neopixel power switch to the ON position, and connect the PSU power.  
 
