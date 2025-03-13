@@ -39,6 +39,8 @@ The project supports two hardware configurations:
 
 ### MatrixChrono_ESP32-NeoMatrix
 
+<img src="MatrixChrono_ESP32-NeoMatrix/MatrixChrono_ESP32-NeoMatrix_Images/MatrixChrono_ESP32-NeoMatrix_Image.JPG" alt="drawing" width="400"/>
+
 -   **Microcontroller**: ESP32
 -   **Display**: NeoPixel Matrix [256 leds]
 -   **Sensors**:
@@ -50,9 +52,10 @@ The project supports two hardware configurations:
     -   💾 EEPROM-based persistent storage [wip]
     -   🛜 Wi-Fi portal for configuration
     -   🌈 Gradual color changing function that rotates clock colors every hour  
-    -   🏠Home Assistant JSON output
+    -   
 
 ### MatrixChrono_ESP8266-MAX7219
+<img src="MatrixChrono_ESP8266-MAX7219/MatrixChrono_ESP8266-MAX7219_images/MatrixChrono_ESP8266-MAX7219_image.jpg" alt="drawing" width="400"/>
 
 -   **Microcontroller**: ESP8266
 -   **Display**: MAX7219 4x 8x8 LED Matrix 
@@ -63,7 +66,7 @@ The project supports two hardware configurations:
     -   🕒 Custom timekeeping function
     -   🌙 Night mode with reduced brightness
     -   💾 EEPROM-based persistent storage
-    -   🏠 Home Assistant JSON output
+    -   🏠Home Assistant JSON output
         
 
 ----------
@@ -216,12 +219,13 @@ For ***MatrixChrono_ESP8266-MAX7219***
 
 Make sure you change **MATRIXCHRONO_IP_ADDRESS** and **UNIQUEID** depending on your settings. 
 
+------
 ## 🔧 General Troubleshooting
 - **Sketch not uploading?**  Verify library versions  
 - **Sketch uploaded but nothing is displayed?**  Check wiring, or library versions, verify log output on serial interface  
 - **Weather not displaying?** Ensure API key is correctly configured.   
 
- 
+ ------
 ## 📜 License
 
 This project is licensed under the **Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0)**
