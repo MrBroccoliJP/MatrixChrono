@@ -42,27 +42,28 @@ The project supports two hardware configurations:
 -   **Microcontroller**: ESP32
 -   **Display**: NeoPixel Matrix [256 leds]
 -   **Sensors**:
-    -   DS18B20 Temperature Sensor
-    -   RTC DS3231 for precise timekeeping
+    -   🌡️ DS18B20 Temperature Sensor
+    -   🕒 RTC DS3231 for precise timekeeping
 -   **Features**:
-    -   Configurable web pages (forms, color wheel, graph plotting)
-    -   Night mode with brightness adjustments
-    -   EEPROM-based persistent storage
-    -   Wi-Fi portal for configuration🛜
-    -  Gradual color changing function that rotates clock colors every hour 🌈 
+    -   💻 Web pages for configuration (forms, color wheel, graph plotting)
+    -   🌙 Night mode with brightness adjustments
+    -   💾 EEPROM-based persistent storage [wip]
+    -   🛜 Wi-Fi portal for configuration
+    -   🌈 Gradual color changing function that rotates clock colors every hour  
+    -   🏠Home Assistant JSON output
 
 ### MatrixChrono_ESP8266-MAX7219
 
 -   **Microcontroller**: ESP8266
--   **Display**: MAX7219 4x 8x8 LED Matrix
+-   **Display**: MAX7219 4x 8x8 LED Matrix 
 -   **Sensors**:
-    -   DHT11 (for humidity and temperature)
-    -   DS18B20 for better accuracy
+    -   🌡️ DHT11 (for humidity and temperature)
+    -   🌡️ DS18B20 for more accurate temperature readings
 -   **Features**:
-    -   Custom timekeeping function
-    -   Night mode with reduced brightness
-    -   EEPROM-based persistent storage
-    -   Home Assistant JSON output
+    -   🕒 Custom timekeeping function
+    -   🌙 Night mode with reduced brightness
+    -   💾 EEPROM-based persistent storage
+    -   🏠 Home Assistant JSON output
         
 
 ----------
@@ -86,7 +87,7 @@ The project supports two hardware configurations:
 ### **MatrixChrono_ESP32-NeoMatrix**
 
 -   [WiFiManager](https://github.com/tzapu/WiFiManager)
-    
+  
 -   [WebServer](https://github.com/espressif/arduino-esp32/tree/master/libraries/WebServer)
     
 -   [WiFiClient](https://github.com/espressif/arduino-esp32/tree/master/libraries/WiFi)
@@ -162,9 +163,11 @@ If you’d like to recreate this project, feel free to do so and contribute! Thi
 
 ## 📡 API & Home Automation Integration
 
-MatrixChrono provides a JSON output of sensor data, making it compatible with **Home Assistant**.
-https://www.home-assistant.io/
-My config on *`/homeassistant/configuration.yaml`*
+MatrixChrono provides a JSON output of sensor data, making it compatible with **Home Assistant**.  
+https://www.home-assistant.io/  
+Configuration.yaml example:
+    
+*`/homeassistant/configuration.yaml`*
 
 
 For ***MatrixChrono_ESP32-NeoMatrix***
@@ -214,9 +217,9 @@ For ***MatrixChrono_ESP8266-MAX7219***
 Make sure you change **MATRIXCHRONO_IP_ADDRESS** and **UNIQUEID** depending on your settings. 
 
 ## 🔧 General Troubleshooting
-- **Sketch not uploading?**  Verify library versions
-- **Sketch uploaded but nothing is displayed?**  Check wiring, or library versions, verify log output on serial interface
-- **Weather not displaying?** Ensure API key is correctly configured. 
+- **Sketch not uploading?**  Verify library versions  
+- **Sketch uploaded but nothing is displayed?**  Check wiring, or library versions, verify log output on serial interface  
+- **Weather not displaying?** Ensure API key is correctly configured.   
 
  
 ## 📜 License
@@ -230,10 +233,12 @@ To view a copy of this license, visit:
 http://creativecommons.org/licenses/by-nc/4.0/
 
 or send a letter to:
-Creative Commons
-PO Box 1866
-Mountain View, CA 94042
-USA
+
+    Creative Commons
+    PO Box 1866  
+    Mountain View,    
+    CA 94042  
+    USA  
 
 In summary (not a substitute for the full license):
 - You are free to share and adapt the material for non-commercial purposes
