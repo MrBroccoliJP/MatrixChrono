@@ -21,49 +21,47 @@
 -   🏡 **Home Assistant Integration**: JSON sensor output for smart home automation.
 ----------
 
+## 📖 Project History
+
+MatrixChrono began in 2018 as a simple assembly of a clock with a 3D-printed shell, using code examples from the web. The project truly evolved in 2020 when I decided to rewrite everything from scratch to gain a deeper understanding of the code and make customizations as needed. The initial version was built around ESP8266 and MAX7219 displays, featuring basic sensors and a simple web interface.
+
+In 2023, I challenged myself to create a more advanced version using NeoPixel matrices and the ESP32 platform. This new iteration pushed my boundaries in both electronics and software development, incorporating more complex animations and dynamic web pages rather than static content.
+
+Both projects remain works in progress. Future plans include standardizing capabilities across both versions by bringing the improved web interface to the ESP8266 variant. For the NeoPixel-based version, I aim to implement more sophisticated functions, colorful animations, and icon support. A hardware revision (V2) of the ESP32-NeoMatrix is also planned, featuring a circular grid pattern in front of the LEDs to improve text readability compared to the current square grid design.
+
+Some known bugs exist that I intend to address when time permits. This is my personal ongoing project that continues to evolve as my skills improve and new ideas emerge.
+
+----------
+
 ## 🔧 Hardware Variants
 
-### **MatrixChrono_ESP32-NeoMatrix**
+The project supports two hardware configurations:
+
+### MatrixChrono_ESP32-NeoMatrix
 
 -   **Microcontroller**: ESP32
-    
 -   **Display**: NeoPixel Matrix [256 leds]
-    
 -   **Sensors**:
-    
     -   DS18B20 Temperature Sensor
-        
     -   RTC DS3231 for precise timekeeping
-        
 -   **Features**:
-    
     -   Configurable web pages (forms, color wheel, graph plotting)
-        
     -   Night mode with brightness adjustments
-        
     -   EEPROM-based persistent storage
-        
-    -   Wi-Fi portal for configuration
-        
+    -   Wi-Fi portal for configuration🛜
+    -  Gradual color changing function that rotates clock colors every hour 🌈 
 
-### **MatrixChrono_ESP8266-MAX7219**
+### MatrixChrono_ESP8266-MAX7219
 
 -   **Microcontroller**: ESP8266
-    
--   **Display**: MAX7219 4x8 LED Matrix
-    
+-   **Display**: MAX7219 4x 8x8 LED Matrix
 -   **Sensors**:
-    
-    -   DHT11 (for humidity and temperature) _(Optional: DS18B20 for better accuracy)_
-        
+    -   DHT11 (for humidity and temperature)
+    -   DS18B20 for better accuracy
 -   **Features**:
-    
     -   Custom timekeeping function
-        
     -   Night mode with reduced brightness
-        
     -   EEPROM-based persistent storage
-        
     -   Home Assistant JSON output
         
 
@@ -214,7 +212,29 @@ For ***MatrixChrono_ESP8266-MAX7219***
 Make sure you change **MATRIXCHRONO_IP_ADDRESS** and **UNIQUEID** depending on your settings. 
 
 ## 🔧 General Troubleshooting
-**Sketch not uploading?** Verify library versions
-**Sketch uploaded but nothing is displayed?** Check wiring, or library versions, verify log output on serial interface
+**Sketch not uploading?**  Verify library versions
+**Sketch uploaded but nothing is displayed?**  Check wiring, or library versions, verify log output on serial interface
 **Weather not displaying?** Ensure API key is correctly configured.
+
+
+## 📜 License
+
+This project is licensed under the **Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0)**
+Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0)
+
+Matrix Chrono © 2025 by João Fernandes is licensed under Creative Commons Attribution-NonCommercial 4.0 International 
+
+To view a copy of this license, visit:
+http://creativecommons.org/licenses/by-nc/4.0/
+
+or send a letter to:
+Creative Commons
+PO Box 1866
+Mountain View, CA 94042
+USA
+
+In summary (not a substitute for the full license):
+- You are free to share and adapt the material for non-commercial purposes
+- You must give appropriate credit and indicate if changes were made
+- You may not use the material for commercial purposes without specific permission
 
