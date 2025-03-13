@@ -150,11 +150,13 @@ If you’d like to recreate this project, feel free to do so and contribute! Thi
 
 ### Configuration
 
+	-   Create a Secrets.h with your own API for weatherapi.com: "String APIKEY = XXXX"
+
 	-   Connect to the WiFi portal for initial setup.
     
 	-   Access the web interface to customize settings.
     
-	-   View real-time temperature graphs and weather data.
+	-   Acess webpage on the IP of the MatrixClock to check real-time temperature graphs and weather data
 
 ------
 
