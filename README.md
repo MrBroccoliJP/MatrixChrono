@@ -212,11 +212,11 @@ For ***MatrixChrono_ESP8266-MAX7219***
 Make sure you change **MATRIXCHRONO_IP_ADDRESS** and **UNIQUEID** depending on your settings. 
 
 ## 🔧 General Troubleshooting
-**Sketch not uploading?**  Verify library versions
-**Sketch uploaded but nothing is displayed?**  Check wiring, or library versions, verify log output on serial interface
-**Weather not displaying?** Ensure API key is correctly configured.
+- **Sketch not uploading?**  Verify library versions
+- **Sketch uploaded but nothing is displayed?**  Check wiring, or library versions, verify log output on serial interface
+- **Weather not displaying?** Ensure API key is correctly configured. 
 
-
+ 
 ## 📜 License
 
 This project is licensed under the **Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4.0)**
