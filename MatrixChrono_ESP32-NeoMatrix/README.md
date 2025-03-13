@@ -32,13 +32,15 @@
     - **Approx. 0.3W per Neopixel at full brightness** (e.g., 256 Neopixels → ~77W).  
     - Running Neopixels at full power is **unnecessary** as they become excessively bright.  
     - The sketch includes a **(WIP) automatic brightness calibration** feature:  
-      - It gradually increases brightness while monitoring power draw.  
+      - It gradually increases brightness until the PSU cuts power
       - The maximum safe brightness level is stored in EEPROM.  
       - If the PSU is overdrawn, a good PSU will handle the overload momentarily before cutting power.  
-  - **⚠️ Important:** Running Neopixels at high power requires:  
+      -   A `max_brightness_limit` will be added to the sketch, serving as a hard limit based on the circuit wiring.
+  
+  - **⚠️ Important: ❌ NOT RECOMMENDED:** Running Neopixels at full power requires:   
     - **Thicker (lower gauge) wiring** to handle the current safely.  
     - **Proper fuses or circuit protection** to prevent overheating or damage.  
-    - **❌ NOT RECOMMENDED:** If you need to run at such high power, consider using **12V Neopixel modules instead** to reduce current draw and wiring issues.  
+    -  If you need to run at such high power, consider using **12V Neopixel modules instead** to reduce current draw and wiring issues.  
     - 🔥**RISK OF FIRE IF NOT PROPERLY CONFIGURED** – Ensure you use appropriate fuses, wiring, and protection to avoid overheating and potential damage.
     - Reduces the lifespan of individual LEDs, especially for those that remain static.
 
@@ -110,7 +112,7 @@ I'll provide the code and general instructions, but I won't be offering in-depth
 
 ## 🛠️ **Initial Setup**
 
-  -   **Connect to the Wi-Fi portal for initial Wi-Fi setup:**
+  -   **Connect to the Wi-Fi portal for initial Wi-Fi setup:** [WifiManager](https://github.com/tzapu/WiFiManager)
         - Connect to the Wi-Fi SSID shown in the screen of the module: "CLOCK_AP"
         - Access the IP: `192.168.1.4`
         - Connect to your Wi-Fi with your password
