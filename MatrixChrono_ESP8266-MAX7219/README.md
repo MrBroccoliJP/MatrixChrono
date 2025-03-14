@@ -1,6 +1,6 @@
 # MatrixChrono - IoT Smart Home Clock System
 
-<img src="MatrixChrono_ESP8266-MAX7219_Images/logo.gif" alt="logo" width="600"/>
+<img src="MatrixChrono_ESP8266-MAX7219_images/logo.gif" alt="photo" width="400"/>
 
 ## MatrixChrono_ESP32-NeoMatrix
 
@@ -42,7 +42,7 @@
 ----
 
 ### ⚡ **Wiring Diagram**  
-<img src="MatrixChrono_ESP8266-MAX7219_Images/Wiring diagram.png" alt="wiring_diagram" width="1000"/>
+<img src="MatrixChrono_ESP8266-MAX7219_images/MatrixChrono_ESP8266-MAX7219_image.jpg" alt="photo" width="1000"/>
 
 -----
 
@@ -104,7 +104,7 @@ MatrixChrono provides a JSON output of sensor data, making it compatible with **
 https://www.home-assistant.io/  
 
 
-<img src="MatrixChrono_ESP8266-MAX7219_Images/Home_Assistant_data_integration.png" alt="Home Assistant data integration image" width="1000"/>
+<img src="MatrixChrono_ESP8266-MAX7219_images/MatrixChrono_ESP8266-MAX7219_image.jpg" alt="photo" width="1000"/>
 
 
 Configuration.yaml example:
