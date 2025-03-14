@@ -1,6 +1,6 @@
 # MatrixChrono - IoT Smart Home Clock System
 
-<img src="MatrixChrono_ESP32-NeoMatrix_Images/logo.gif" alt="drawing" width="600"/>
+<img src="MatrixChrono_ESP32-NeoMatrix_Images/logo.gif" alt="logo" width="600"/>
 
 ## MatrixChrono_ESP32-NeoMatrix
 
@@ -72,7 +72,7 @@ In my case, I will always be limited by the PSU output, and for a V2, I will mak
 ----
 
 ### ⚡ **Wiring Diagram**  
-<img src="MatrixChrono_ESP32-NeoMatrix_Images/Wiring diagram.png" alt="drawing" width="1000"/>
+<img src="MatrixChrono_ESP32-NeoMatrix_Images/Wiring diagram.png" alt="wiring diagram" width="1000"/>
 
 -----
 
@@ -138,7 +138,7 @@ MatrixChrono provides a JSON output of sensor data, making it compatible with **
 https://www.home-assistant.io/  
 
 
-<img src="MatrixChrono_ESP32-NeoMatrix_Images/Home_Assistant_data_integration.png" alt="drawing" width="1000"/>
+<img src="MatrixChrono_ESP32-NeoMatrix_Images/Home_Assistant_data_integration.png" alt="Home Assistant data integration image" width="1000"/>
 
 
 Configuration.yaml example:
