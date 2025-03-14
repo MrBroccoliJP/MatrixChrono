@@ -168,39 +168,6 @@ https://www.home-assistant.io/
 <img src="MatrixChrono_ESP32-NeoMatrix/MatrixChrono_ESP32-NeoMatrix_Images/Home_Assistant_data_integration.png" alt="drawing" width="1000"/>
 
 
-For ***MatrixChrono_ESP8266-MAX7219***
-
-    sensor:
-      - platform: rest
-        name: "MatrixChrono_ESP8266-MAX7219 Sensor1 Temperature"
-        unit_of_measurement: "°C"
-        resource: "**MATRIXCHRONO_IP_ADDRESS**/JsonSensorData"
-        scan_interval: 900
-        value_template: "{{ value_json.Sensor1_Temperature }}"
-        device_class: temperature
-        unique_id: "UNIQUEID"
-    
-      - platform: rest
-        name: "MatrixChrono_ESP8266-MAX7219 Sensor2 Temperature"
-        unit_of_measurement: "°C"
-        resource: "**MATRIXCHRONO_IP_ADDRESS**/JsonSensorData"
-        scan_interval: 900
-        value_template: "{{ value_json.Sensor2_Temperature }}"
-        device_class: temperature
-        unique_id: "UNIQUEID"
-    
-      - platform: rest
-        name: "MatrixChrono_ESP8266-MAX7219 Sensor2 Humidity"
-        unit_of_measurement: "%"
-        resource: "**MATRIXCHRONO_IP_ADDRESS**/JsonSensorData"
-        scan_interval: 900
-        value_template: "{{ value_json.Sensor2_Humidity }}"
-        device_class: humidity
-        unique_id: "UNIQUEID"
-
-
-Make sure you change **MATRIXCHRONO_IP_ADDRESS** and **UNIQUEID** depending on your settings. 
-
 ------
 ## 🌐 Web Interface
 Acess the webpages by navigating to the IP of the MatrixChrono. The IP is shown everytime the module is started.  

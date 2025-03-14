@@ -157,3 +157,5 @@ For ***MatrixChrono_ESP32-NeoMatrix***
         value_template: "{{ value_json.Temperature }}"
         device_class: temperature
         unique_id: "UNIQUEID"
+
+Make sure you change **MATRIXCHRONO_IP_ADDRESS** and **UNIQUEID** depending on your settings. 
