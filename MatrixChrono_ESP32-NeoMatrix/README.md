@@ -159,3 +159,9 @@ For ***MatrixChrono_ESP32-NeoMatrix***
         unique_id: "UNIQUEID"
 
 Make sure you change **MATRIXCHRONO_IP_ADDRESS** and **UNIQUEID** depending on your settings. 
+
+
+------
+MatrixChrono © 2025 by João Fernandes is licensed under Creative Commons Attribution-NonCommercial 4.0 International
+
+To view a copy of this license, visit: http://creativecommons.org/licenses/by-nc/4.0/
