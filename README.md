@@ -164,27 +164,8 @@ While I provide the code and general instructions, I won't be providing in depth
 MatrixChrono provides a JSON output of sensor data, making it compatible with **Home Assistant**.  
 https://www.home-assistant.io/  
 
-example:  
 
 <img src="MatrixChrono_ESP32-NeoMatrix/MatrixChrono_ESP32-NeoMatrix_Images/Home_Assistant_data_integration.png" alt="drawing" width="1000"/>
-
-
-Configuration.yaml example:
-    
-*`/homeassistant/configuration.yaml`*
-
-
-For ***MatrixChrono_ESP32-NeoMatrix***
-
-    sensor:
-      - platform: rest
-        name: "MatrixChrono_ESP32-NeoMatrix Temperature"
-        unit_of_measurement: "°C"
-        resource: "**MATRIXCHRONO_IP_ADDRESS**/JsonSensorData"
-        scan_interval: 900
-        value_template: "{{ value_json.Temperature }}"
-        device_class: temperature
-        unique_id: "UNIQUEID"
 
 
 For ***MatrixChrono_ESP8266-MAX7219***
