@@ -31,6 +31,8 @@ Both projects remain works in progress. Future plans include standardizing capab
 
 Some known bugs exist that I intend to address when time permits. This is my personal ongoing project that continues to evolve as my skills improve and new ideas emerge.
 
+<img src="MatrixChrono_ESP8266-MAX7219/MatrixChrono_ESP8266-MAX7219_Images/Version-Evolution.png" alt="drawing" width="1000"/>  
+
 ----------
 
 ## 🔧 Hardware Variants
