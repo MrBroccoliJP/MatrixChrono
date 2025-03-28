@@ -195,8 +195,9 @@ Creative Commons Attribution-NonCommercial 4.0 International License (CC BY-NC 4
 
 MatrixChrono © 2025 by João Fernandes is licensed under Creative Commons Attribution-NonCommercial 4.0 International 
 
-To view a copy of this license, visit:
-http://creativecommons.org/licenses/by-nc/4.0/
+See the [LICENSE](LICENSE.txt) file for details  
+Or visit:  
+[http://creativecommons.org/licenses/by-nc/4.0/](http://creativecommons.org/licenses/by-nc/4.0/)  
 
 or send a letter to:
 
