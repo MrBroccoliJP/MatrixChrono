@@ -1,6 +1,6 @@
 # MatrixChrono - IoT Smart Home Clock System
 
-<img src="MatrixChrono_ESP8266-MAX7219/MatrixChrono_ESP8266-MAX7219_images/logo.gif" alt="drawing" width="600"/>
+<img src="MatrixChrono_ESP8266-MAX7219/MatrixChrono_ESP8266-MAX7219_images/logo.gif" alt="logo" width="600"/>
 
 **MatrixChrono** is a collection of IoT-enabled smart home clock systems featuring real-time weather updates, sensor feedback, and home automation integration. Using matrix-based LED displays, it offers a sleek and functional way to track time, temperature, and more. The project supports two hardware configurations: one with ESP8266 and MAX7219 displays, and another with ESP32 and a NeoPixel matrix. 
 
@@ -31,7 +31,7 @@ Both projects remain works in progress. Future plans include standardizing capab
 
 Some known bugs exist that I intend to address when time permits. This is my personal ongoing project that continues to evolve as my skills improve and new ideas emerge.
 
-<img src="MatrixChrono_ESP8266-MAX7219/MatrixChrono_ESP8266-MAX7219_Images/Version-Evolution.png" alt="drawing" width="1000"/>  
+<img src="MatrixChrono_ESP8266-MAX7219/MatrixChrono_ESP8266-MAX7219_images/Version-Evolution.png" alt="drawing" width="1000"/>  
 
 ----------
 
