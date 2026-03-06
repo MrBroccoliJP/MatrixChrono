@@ -40,7 +40,7 @@ RTC_DS3231 rtc;
 
 char* C_POSIX = PT_POSIX;
 
-const char* Version = "5.36";
+const char* Version = "5.37";
 
 
 Adafruit_NeoMatrix matrix = Adafruit_NeoMatrix(8, 8, 4, 1, PIN,
@@ -127,7 +127,7 @@ int8_t Screen_Clock_Min = -1;
 uint8_t Clock_Sec;  //only used for certain functions.
 short int LastRTCSyncTime = -1;
 
-uint8_t NightModeStartHour = 00;
+uint8_t NightModeStartHour = 23;
 uint8_t NightModeStartMin = 00;
 uint8_t NightModeEndHour = 11;
 uint8_t NightModeEndMin = 00;
@@ -137,7 +137,7 @@ bool sunrise_loop = 0;
 CircularBuffer<uint8_t, 100> TempDataTimeHour;
 CircularBuffer<uint8_t, 100> TempDataTimeMin;
 CircularBuffer<float, 100> TempDataSensor1;  //Actual sensor
-CircularBuffer<String, 20> TerminalBuffer;   
+CircularBuffer<String, 20> TerminalBuffer;
 
 bool wifi_connected = 0;
 WiFiManager wm;
@@ -164,6 +164,8 @@ void setup() {
 
   WiFi.mode(WIFI_STA);  // explicitly set mode, esp defaults to STA+AP
   WiFi.setSleep(WIFI_PS_NONE);
+  WiFi.setAutoReconnect(true);
+  WiFi.persistent(true);              // keep WiFi config in NVS
   wm.setConfigPortalBlocking(false);  // Set configuration portal to non-blocking mode
   wm.setConfigPortalTimeout(120);     // Set configuration portal timeout to 60 seconds
 
@@ -408,10 +410,43 @@ void loop() {
   // Get the current time (you can cache it to avoid repeated calls)
   int currentTime = country.hour() * 100 + country.minute();
   int nightEndTime = NightModeEndHour * 100 + NightModeEndMin;
+  int nightStartTime = NightModeStartHour * 100 + NightModeStartMin;
 
   // Determine if we are in night mode or normal mode
-  if (currentTime >= nightEndTime) {
-    if (ClockSwitchFlag != 1) {
+
+  bool isNight;
+
+  if (nightStartTime == nightEndTime) {
+    // interpret as "never night" (or "always night" if you prefer)
+    isNight = false;
+  } else if (nightStartTime > nightEndTime) {
+    // crosses midnight (e.g., 2300 -> 0700)
+    isNight = (currentTime >= nightStartTime) || (currentTime < nightEndTime);
+  } else {
+    // same-day interval (e.g., 2000 -> 2300 OR 0000 -> 0700)
+    isNight = (currentTime >= nightStartTime) && (currentTime < nightEndTime);
+  }
+
+  if (isNight) {
+    //NIGHT MODE
+    if (ClockSwitchFlag != 0) {
+      // Night mode initialization
+      CurrentColor = NightColor;
+      matrix.setFont(&Mini_Font);
+      matrix.setTextColor(CurrentColor);  //never change the values of MainColor or NightColor (PROTECTED VALUES)
+      RGB565TORGB(NightColor, r, g, b);
+      r_dec = double(r) / 25;
+      g_dec = double(g) / 23;
+      b_dec = double(b) / 24;
+      ClockSwitchFlag = 0;
+      //get sunrise and sunset time? using http://api.weatherapi.com
+      getWeather();
+    }
+    // Minimalist Clock display for night mode
+    minimalist_Clock();
+
+  } else {
+     if (ClockSwitchFlag != 1) {
       // Normal mode initialization
       sunrise_loop = 0;
       CurrentColor = MainColor;  //the MainColor property is always the starting value of the normal clock mode, even when the randomColor flag is set
@@ -428,24 +463,9 @@ void loop() {
     }
     // Normal Clock display
     Normal_Clock();
-
-  } else {
-    if (ClockSwitchFlag != 0) {
-      // Night mode initialization
-      CurrentColor = NightColor;
-      matrix.setFont(&Mini_Font);
-      matrix.setTextColor(CurrentColor);  //never change the values of MainColor or NightColor (PROTECTED VALUES)
-      RGB565TORGB(NightColor, r, g, b);
-      r_dec = double(r) / 25;
-      g_dec = double(g) / 23;
-      b_dec = double(b) / 24;
-      ClockSwitchFlag = 0;
-      //get sunrise and sunset time? using http://api.weatherapi.com
-      getWeather();
-    }
-    // Minimalist Clock display for night mode
-    minimalist_Clock();
   }
+
+
   yield();
 }
 
@@ -912,7 +932,7 @@ void refresh_normal_clock_slideEffect() {
 }
 
 void tick(short int x_loc, short int y_loc_led1, short int y_loc_led2) {
-short int correction;
+  short int correction;
   if ((millis() - tmp_millis) > 500 && (millis() - tmp_millis) <= 1000) {
     r_tmp = r;
     g_tmp = g;
@@ -930,10 +950,10 @@ short int correction;
                                            // tmp_millis = millis();
   }
 
-    uint16_t color = matrix.Color(int(r_tmp), int(g_tmp), int(b_tmp));
-    matrix.drawPixel(x_loc, y_loc_led1, color);
-    matrix.drawPixel(x_loc, y_loc_led2, color);
-    matrix.show();
+  uint16_t color = matrix.Color(int(r_tmp), int(g_tmp), int(b_tmp));
+  matrix.drawPixel(x_loc, y_loc_led1, color);
+  matrix.drawPixel(x_loc, y_loc_led2, color);
+  matrix.show();
 }
 
 void fade_tick(short int x_loc, short int y_loc_led1, short int y_loc_led2) {
