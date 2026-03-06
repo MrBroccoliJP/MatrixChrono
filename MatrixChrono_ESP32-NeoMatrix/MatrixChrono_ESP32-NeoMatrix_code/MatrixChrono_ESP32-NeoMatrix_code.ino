@@ -40,7 +40,7 @@ RTC_DS3231 rtc;
 
 char* C_POSIX = PT_POSIX;
 
-const char* Version = "5.37";
+const char* Version = "5.4";
 
 
 Adafruit_NeoMatrix matrix = Adafruit_NeoMatrix(8, 8, 4, 1, PIN,
@@ -143,7 +143,7 @@ bool wifi_connected = 0;
 WiFiManager wm;
 
 void setup() {
-
+  sensors.begin();
   pinMode(buttonPin, INPUT_PULLUP);
   Serial.begin(115200);
 
@@ -430,6 +430,7 @@ void loop() {
   if (isNight) {
     //NIGHT MODE
     if (ClockSwitchFlag != 0) {
+        matrix.fillScreen(0);
       // Night mode initialization
       CurrentColor = NightColor;
       matrix.setFont(&Mini_Font);
@@ -446,7 +447,7 @@ void loop() {
     minimalist_Clock();
 
   } else {
-     if (ClockSwitchFlag != 1) {
+    if (ClockSwitchFlag != 1) {
       // Normal mode initialization
       sunrise_loop = 0;
       CurrentColor = MainColor;  //the MainColor property is always the starting value of the normal clock mode, even when the randomColor flag is set
@@ -1512,7 +1513,7 @@ void Start_Web_Servers() {
 
     for (size_t i = 0; i < TempDataTimeHour.size(); ++i) {
       // Concatenate hour and minute with a colon
-      formattedTimeString += "\"" + (TempDataTimeHour[i] < 10 ? "0" + String(TempDataTimeHour[i]) : String(TempDataTimeHour[i])) + ":" + (TempDataTimeMin[i] < 10 ? "0" + String(TempDataTimeMin[i]) : String(TempDataTimeMin[i])) + "\"";
+      formattedTimeString +=  (TempDataTimeHour[i] < 10 ? "0" + String(TempDataTimeHour[i]) : String(TempDataTimeHour[i])) + ":" + (TempDataTimeMin[i] < 10 ? "0" + String(TempDataTimeMin[i]) : String(TempDataTimeMin[i]));
       formattedTempDataSensor1 += String(TempDataSensor1[i]);
       // Add comma if not the last element
       if (i != TempDataTimeHour.size() - 1) {
@@ -1521,7 +1522,6 @@ void Start_Web_Servers() {
       }
     }
     for (size_t i = 0; i < TerminalBuffer.size(); ++i) {
-
       formattedTerminalOutput += TerminalBuffer[i] + "\n";
     }
     String page = String(MAIN_page);
@@ -1542,6 +1542,7 @@ void Start_Web_Servers() {
     page.replace("{{SENSOR2VALUE}}", String(rtc.getTemperature()) + "ºC");
     page.replace("{{X_AXIS}}", formattedTimeString);
     page.replace("{{Y_SENSOR1DATA}}", formattedTempDataSensor1);
+
     page.replace("{{terminalOutput}}", formattedTerminalOutput);
     page.replace("{{PLACE}}", CIDADE);
     if (randomColor) {
@@ -1556,6 +1557,8 @@ void Start_Web_Servers() {
     }
     server.send(200, "text/html", page);
   });
+
+  server.on("/SaveNewSettings", HTTP_POST, handleSaveNewSettings);
 
   server.on("/JsonSensorData", HTTP_GET, []() {
     if (TempDataTimeHour.size() == 0) {
@@ -1581,10 +1584,11 @@ void Start_Web_Servers() {
 
 
     for (size_t i = 0; i < TempDataTimeHour.size(); ++i) {
-      // Concatenate hour and minute with a colon
-      formattedTimeString += "\"" + (TempDataTimeHour[i] < 10 ? "0" + String(TempDataTimeHour[i]) : String(TempDataTimeHour[i])) + ":" + (TempDataTimeMin[i] < 10 ? "0" + String(TempDataTimeMin[i]) : String(TempDataTimeMin[i])) + "\"";
+      formattedTimeString +=
+        (TempDataTimeHour[i] < 10 ? "0" + String(TempDataTimeHour[i]) : String(TempDataTimeHour[i])) + ":" + (TempDataTimeMin[i] < 10 ? "0" + String(TempDataTimeMin[i]) : String(TempDataTimeMin[i]));
+
       formattedTempDataSensor1 += String(TempDataSensor1[i]);
-      // Add comma if not the last element
+
       if (i != TempDataTimeHour.size() - 1) {
         formattedTimeString += ",";
         formattedTempDataSensor1 += ",";
@@ -1719,6 +1723,45 @@ void getWeather() {
 
     http.end();  // Close the connection
   }
+}
+
+
+void handleSaveNewSettings() {
+
+  if (server.hasArg("posix")) {
+    C_POSIX = strdup(server.arg("posix").c_str());
+    country.setPosix(C_POSIX);
+  }
+
+  if (server.hasArg("place")) {
+    CIDADE = server.arg("place");
+  }
+
+  if (server.hasArg("weather")) {
+    weather = server.arg("weather") == "true";
+  }
+
+  if (server.hasArg("randomcolor")) {
+    randomColor = server.arg("randomcolor") == "true";
+  }
+
+  if (server.hasArg("start")) {
+    String start = server.arg("start");
+
+    NightModeStartHour = start.substring(0,2).toInt();
+    NightModeStartMin  = start.substring(3,5).toInt();
+  }
+
+  if (server.hasArg("end")) {
+    String end = server.arg("end");
+
+    NightModeEndHour = end.substring(0,2).toInt();
+    NightModeEndMin  = end.substring(3,5).toInt();
+  }
+
+  TerminalOutput("Settings updated from Web UI");
+
+  server.send(200, "text/plain", "OK");
 }
 
 

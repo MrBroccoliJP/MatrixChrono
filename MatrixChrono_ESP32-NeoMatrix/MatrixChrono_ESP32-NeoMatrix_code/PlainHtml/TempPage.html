@@ -1,0 +1,171 @@
+<!DOCTYPE html>
+<html lang="pt">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🌡️</text></svg>">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/3.7.0/chart.min.js"></script>
+    <title>Temperaturas</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background: #f3f3f3;
+        }
+
+        #container {
+            max-width: 800px;
+            margin: 50px auto;
+            background: #fff;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            overflow: hidden;
+        }
+
+        .chart-container,
+        #custom-text {
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        #custom-text {
+            color: #999;
+        }
+
+        table {
+            width: 90%;
+            border-collapse: collapse;
+            margin: 20px auto 0;
+        }
+
+        th,
+        td {
+            border: 1px solid #ccc;
+            padding: 8px;
+            text-align: center;
+        }
+
+        th {
+            background: #f2f2f2;
+        }
+
+        .button-row {
+            display: flex;
+            gap: 10px;
+            margin: 20px;
+        }
+
+        .back-button,
+        .tempReq-button {
+            padding: 10px 20px;
+            color: #fff;
+            border: none;
+            border-radius: 5px;
+            cursor: pointer;
+        }
+
+        .back-button {
+            background: #4CAF50;
+        }
+
+        .tempReq-button {
+            background: #fc5a03;
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container">
+        <h1 style="text-align: center;">Temperaturas</h1>
+
+        <div class="button-row">
+            <button class="back-button" type="button" onclick="window.location.href='/'">⬅️</button>
+            <button class="tempReq-button" type="button" onclick="temperatureRequest()">+</button>
+        </div>
+
+        <div class="chart-container">
+            <canvas id="TempChart"></canvas>
+        </div>
+
+        <table id="data-table">
+            <thead>
+                <tr>
+                    <th>Hora</th>
+                    <th>Sensor 1 (ºC)</th>
+                </tr>
+            </thead>
+            <tbody></tbody>
+        </table>
+
+        <div id="custom-text">
+            Sensor page v9<br>
+            {{Custom-text}}
+        </div>
+    </div>
+
+    <script>
+        function temperatureRequest() {
+            fetch('/TempRequest', { method: 'POST' });
+            setTimeout(function () {
+                window.location.reload();
+            }, 1000);
+        }
+
+        const rawTime = "{{X_AXIS}}";
+        const rawSensor1 = "{{Y_SENSOR1DATA}}";
+
+        const Time = rawTime.includes("{{") || rawTime.trim() === ""
+            ? []
+            : rawTime.split(",");
+
+        const Sensor1 = rawSensor1.includes("{{") || rawSensor1.trim() === ""
+            ? []
+            : rawSensor1.split(",").map(Number);
+
+        const tableBody = document.querySelector("#data-table tbody");
+
+        for (let i = 0; i < Time.length; i++) {
+            const row = document.createElement("tr");
+            row.innerHTML = `
+                <td>${Time[i]}</td>
+                <td>${Sensor1[i] ?? ""}</td>
+            `;
+            tableBody.appendChild(row);
+        }
+
+        new Chart("TempChart", {
+            type: "line",
+            data: {
+                labels: Time,
+                datasets: [{
+                    label: "Sensor 1",
+                    fill: false,
+                    lineTension: 0.15,
+                    backgroundColor: "rgba(176, 51, 81, 1.0)",
+                    borderColor: "rgba(239, 71, 111, 0.8)",
+                    data: Sensor1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: true
+                    }
+                },
+                scales: {
+                    y: {
+                        title: {
+                            display: true,
+                            text: "Temperatura (ºC)"
+                        }
+                    }
+                }
+            }
+        });
+    </script>
+</body>
+</html>

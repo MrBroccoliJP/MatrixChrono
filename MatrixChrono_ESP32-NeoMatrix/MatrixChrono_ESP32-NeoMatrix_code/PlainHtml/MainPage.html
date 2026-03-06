@@ -1,0 +1,356 @@
+<!DOCTYPE html>
+<html lang="pt">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🕒</text></svg>">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+    <title>MainPage</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f3f3f3;
+        }
+
+        #container {
+            max-width: 800px;
+            margin: 50px auto;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            overflow: hidden;
+        }
+
+        .settings-section {
+            flex: 1;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .settings-section.current-settings {
+            border-right: 1px solid #ccc;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        input[type="time"],
+        select {
+            display: inline-block;
+            vertical-align: middle;
+            width: auto;
+            padding: 3px;
+            margin-top: 0;
+            margin-bottom: 2px;
+            border-radius: 50px;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+        }
+
+        button {
+            padding: 8px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        .color-box {
+            display: inline-block;
+            vertical-align: middle;
+            width: 20px;
+            height: 20px;
+            border: 1px solid #ccc;
+            background-color: #000;
+            margin-right: 10px;
+        }
+
+        .terminal {
+            width: 100%;
+            height: 400px;
+            margin-top: -5px;
+            border-radius: 10px;
+            background-color: black;
+            color: lime;
+            font-family: monospace;
+        }
+
+        hr {
+            border-top: 2px solid #000;
+        }
+
+        @media only screen and (max-width: 600px) {
+            #container {
+                flex-direction: column;
+                margin: 20px;
+            }
+
+            .settings-section {
+                margin-bottom: 20px;
+                border: none;
+            }
+
+            .settings-section.current-settings {
+                border-right: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container">
+        <!-- Current Settings -->
+        <div class="settings-section current-settings">
+            <h2>⚙️ Definições atuais</h2>
+
+            <div>
+                <p><strong>Definições base:</strong></p>
+                <p><strong>🌍 POSIX:</strong> {{POSIX}}</p>
+                <p><strong>🛜 WiFi:</strong> {{WiFi}} | <strong>IP:</strong> {{IP}}</p>
+                <p><strong>🔆 Brilho</strong> (máximo): {{MAXBRIGHTNESS}}</p>
+
+                <hr>
+
+                <p><strong>☀️ Definições de relógio diário:</strong></p>
+                <p><strong>🗛 Tipo de letra:</strong> {{FONT}}</p>
+                <p>
+                    <strong>🎨 Cor do relógio:</strong>
+                    <span class="color-box" style="background-color: {{MAINCOLOR}};"></span>
+                    <strong>| 🎲 Cor aleatória:</strong>
+                    <input type="checkbox" id="current-random-color" {{RANDOMCOLORCHECKBOX}} disabled>
+                </p>
+                <p><strong>🗺️ Região:</strong> {{PLACE}}</p>
+                <p>
+                    <strong>⛅ Metereologia:</strong>
+                    <input type="checkbox" id="current-weather" {{WEATHERCHECKBOX}} disabled>
+                </p>
+
+                <hr>
+
+                <p><strong>🌙 Definições de relógio noturno:</strong></p>
+                <p>
+                    <strong>🌘 Modo Noturno:</strong>
+                    <input type="checkbox" id="current-night-clock" {{NIGHTCLOCKCHECKBOX}} disabled>
+                </p>
+                <p>
+                    <strong>🕛 Hora de início:</strong>
+                    <input type="time" id="current-start-hour" value="{{NIGHTCLOCKSTART}}" disabled>
+                </p>
+                <p>
+                    <strong>🕘 Hora de fim:</strong>
+                    <input type="time" id="current-end-hour" value="{{NIGHTCLOCKEND}}" disabled>
+                </p>
+                <p>
+                    <strong>🖌️ Cor do relógio no modo noturno:</strong>
+                    <span class="color-box" style="background-color: {{NIGHTCOLOR}};"></span>
+                </p>
+
+                <hr>
+
+                <p><strong>📄 Versão de firmware:</strong> {{FIRMWAREVERSION}}</p>
+                <p><strong>🕘 Hora:</strong> (ecrã) {{CURRENTHOUR}}</p>
+                <p><strong>📅 Tempo&Data interno:</strong> {{ezTime}}</p>
+                <p><strong>🛰️ RTC chip:</strong> {{RTCCHIP}}</p>
+                <p><strong>⏲️ Tempo desde o ultimo reset:</strong> {{UPTIME}}</p>
+                <p><strong>🌡️ Temperatura (sensor 1):</strong> {{SENSOR1VALUE}}</p>
+                <p><strong>🌡️ Temperatura (sensor 2):</strong> {{SENSOR2VALUE}}</p>
+
+                <canvas id="TempChart"></canvas>
+                <button type="button" onclick="window.location.href='/Sensor'">🌡️ Leituras</button>
+            </div>
+        </div>
+
+        <!-- New Settings -->
+        <div class="settings-section">
+            <h2>🛠️ Definições Novas</h2>
+
+            <div>
+                <br>
+
+                <label for="posix">
+                    <strong>🌍 POSIX:</strong>
+                    <button type="button"
+                        onclick="window.open('https://github.com/ropg/ezTime?tab=readme-ov-file#timezones-1', '_blank')">
+                        ?
+                    </button>
+                    <input type="text" id="posix" value="{{POSIX}}">
+                </label>
+
+                <label for="brightness-button">
+                    <strong>🔆 Brilho</strong> (máximo):
+                    <button type="button" id="brightness-button"
+                        onclick="window.location.href='/CalibrateMaxBrightness'">
+                        🔦 Calibrar
+                    </button>
+                </label>
+
+                <label for="letter-font">
+                    <strong>🗛 Tipo de letra:</strong>
+                    <select id="letter-font" class="select">
+                        <option value="{{FONT}}">{{FONT}}</option>
+                    </select>
+                </label>
+
+                <hr>
+
+                <p>
+                    <strong>⛅ Metereologia:</strong>
+                    <input type="checkbox" id="weather-enabled" name="weather-enabled" {{WEATHERCHECKBOX}}>
+                </p>
+
+                <label for="WAPIKEY">
+                    <strong>🔑 API KEY:</strong>
+                    <input type="text" id="WAPIKEY" value="{{WEATHERAPIKEY}}">
+                </label>
+
+                <label for="WPLACE">
+                    <strong>🗺️ Região:</strong>
+                    <input type="text" id="WPLACE" value="{{WEATHERPLACE}}">
+                </label>
+
+                <hr>
+
+                <label for="night-clock-enable">
+                    <strong>🌘 Modo noturno:</strong>
+                    <input type="checkbox" id="night-clock-enable" name="night-clock-enable" {{NIGHTCLOCKCHECKBOX}}>
+                </label>
+
+                <label for="start-hour">
+                    <strong>🕛 Hora de início:</strong>
+                    <input type="time" id="start-hour" value="{{NIGHTCLOCKSTART}}">
+                </label>
+
+                <label for="end-hour">
+                    <strong>🕘 Hora de fim:</strong>
+                    <input type="time" id="end-hour" value="{{NIGHTCLOCKEND}}">
+                </label>
+
+                <hr>
+
+                <p>
+                    <strong>🎨 Cor do relógio:</strong>
+                    <span class="color-box" style="background-color: {{MAINCOLOR}};"></span>
+                    <span class="color-box" style="background-color: {{NIGHTCOLOR}};"></span>
+
+                    <strong>🎲 Cor aleatória:</strong>
+                    <input type="checkbox" id="random-color" name="random-color" {{RANDOMCOLORCHECKBOX}}>
+                </p>
+
+                <button type="button" onclick="window.location.href='/Color'">
+                    🖌️ Alterar cores
+                </button>
+
+                <hr>
+            </div>
+
+            <button type="button" onclick="SaveNewSettings()">💾 Guardar</button>
+            <button type="button" onclick="ESPReset()">🔄️ Reiniciar</button>
+            <button type="button" onclick="FactoryReset()">⚠️ Reset</button>
+
+            <hr>
+
+            <h3>🖥️ Terminal Output</h3>
+            <textarea id="terminal" rows="10" readonly class="terminal">{{terminalOutput}}</textarea>
+        </div>
+    </div>
+
+    <script>
+        const rawTime = "{{X_AXIS}}";
+        const rawSensor1 = "{{Y_SENSOR1DATA}}";
+
+        const Time = rawTime.includes("{{") ? [] : rawTime.split(",");
+        const Sensor1 = rawSensor1.includes("{{") ? [] : rawSensor1.split(",").map(Number);
+
+        new Chart("TempChart", {
+            type: "line",
+            data: {
+                labels: Time,
+                datasets: [{
+                    label: "Sensor 1",
+                    fill: false,
+                    tension: 0.15,
+                    backgroundColor: "rgba(176, 51, 81, 1.0)",
+                    borderColor: "rgba(239, 71, 111, 0.8)",
+                    data: Sensor1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: true
+                    }
+                },
+                scales: {
+                    y: {
+                        title: {
+                            display: true,
+                            text: "Temperatura (ºC)"
+                        }
+                    }
+                }
+            }
+        });
+
+        function SaveNewSettings() {
+            var posix = document.getElementById("posix").value;
+            var font = document.getElementById("letter-font").value;
+            var apiKey = document.getElementById("WAPIKEY").value;
+            var place = document.getElementById("WPLACE").value;
+            var weather = document.getElementById("weather-enabled").checked;
+            var nightClock = document.getElementById("night-clock-enable").checked;
+            var randomColor = document.getElementById("random-color").checked;
+            var startHour = document.getElementById("start-hour").value;
+            var endHour = document.getElementById("end-hour").value;
+
+            var data =
+                "posix=" + encodeURIComponent(posix) +
+                "&font=" + encodeURIComponent(font) +
+                "&weather=" + encodeURIComponent(weather) +
+                "&apikey=" + encodeURIComponent(apiKey) +
+                "&place=" + encodeURIComponent(place) +
+                "&nightclock=" + encodeURIComponent(nightClock) +
+                "&randomcolor=" + encodeURIComponent(randomColor) +
+                "&start=" + encodeURIComponent(startHour) +
+                "&end=" + encodeURIComponent(endHour);
+
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "/SaveNewSettings", true);
+            xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+            xhr.send(data);
+
+            console.log(data);
+        }
+
+        function ESPReset() {
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "/ESPReset", true);
+            xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+            xhr.send();
+        }
+
+        function FactoryReset() {
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "/FactoryReset", true);
+            xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+            xhr.send();
+        }
+    </script>
+</body>
+
+</html>
