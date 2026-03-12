@@ -12,7 +12,6 @@
 #include <WiFiClient.h>
 WiFiClient wifiClient;
 #include <CircularBuffer.hpp>
-#include <EEPROM.h>
 #include <ArduinoOTA.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_NeoMatrix.h>
@@ -43,7 +42,7 @@ Timezone country;
 
 char* C_POSIX = PT_POSIX;
 
-const char* Version = "5.42";
+const char* firmwareVersion = "5.52";
 
 
 Adafruit_NeoMatrix matrix = Adafruit_NeoMatrix(8, 8, 4, 1, PIN,
@@ -63,47 +62,52 @@ WebServer server(80);
 struct AppSettings {
   uint8_t maxbrightness;
 
-  uint16_t MainColor;   // RGB565
-  uint16_t NightColor;  // RGB565
+  uint16_t mainColor;   // RGB565
+  uint16_t nightColor;  // RGB565
 
   bool randomColor;
   bool weather;
 
-  char CIDADE[32];
-  char Language[16];
+  char city[32];
+  char language[16];
 
-  uint8_t NightModeStartHour;
-  uint8_t NightModeStartMin;
-  uint8_t NightModeEndHour;
-  uint8_t NightModeEndMin;
+  uint8_t nightModeStartHour;
+  uint8_t nightModeStartMin;
+  uint8_t nightModeEndHour;
+  uint8_t nightModeEndMin;
 };
 
 AppSettings settings;
-
+bool randomColor = 1;
+uint8_t red, green, blue;  //USED FOR THE RGB565TORGB FUNCTION
 //AsyncWebServer server(80);
 bool wifiportal;  //used to see if the wifi is connected or not.
 
 uint8_t r = 0;             //main red color
 uint8_t g = 0;             //main green color
 uint8_t b = 0;             //main blue color
-uint8_t red, green, blue;  //USED FOR THE RGB565TORGB FUNCTION
-bool randomColor = 1;
-uint8_t maxRGBValue;
-uint8_t next_r, next_g, next_b;                           //used to store the max value of r,g,b in order to calculate a random color with the same "brightness"
-float dec_next_r, dec_next_g, dec_next_b;                 //these values are used to calculate the random color change
-float dec_next_r_calc, dec_next_g_calc, dec_next_b_calc;  //float values to temporarily calculate the values of r,g,b if random color
-float r_tmp = 0;                                          //used for calculation for red in tick effect
-float g_tmp = 0;                                          //used for calculation for green in tick effect
-float b_tmp = 0;                                          //used for calculation for blue in tick effect
-float r_dec = 0;                                          //used for calculation of the increments for red
-float g_dec = 0;                                          //used for calculation of the increments for green
-float b_dec = 0;                                          //used for calculation of the increments for blue
+
+uint8_t maxChannelValue;
+uint8_t targetR, targetG, targetB;                           //used to store the max value of r,g,b in order to calculate a random color with the same "brightness"
+float targetStepR, targetStepG, targetStepB;                 //these values are used to calculate the random color change
+float interpolatedR, interpolatedG, interpolatedB;  //float values to temporarily calculate the values of r,g,b if random color
+float fadeCurrentR = 0;                                          //used for calculation for red in tick effect
+float fadeCurrentG = 0;                                          //used for calculation for green in tick effect
+float fadeCurrentB = 0;                                          //used for calculation for blue in tick effect
+float fadeStepR= 0;                                          //used for calculation of the increments for red
+float fadeStepG = 0;                                          //used for calculation of the increments for green
+float fadeStepB = 0;                                          //used for calculation of the increments for blue
+
+
+enum class ClockMode { NORMAL,
+                       NIGHT };
+ClockMode currentMode;
+bool modeInitialized = false;
 
 //max brightness 175
 uint8_t buttonPin = 26;
 
-uint16_t CurrentColor = 0;
-uint8_t x = 0;
+uint16_t currentColor = 0;
 
 unsigned long tmp_millis = millis();  //used to store millis information
 unsigned long wifi_millis = 0;
@@ -122,49 +126,40 @@ String weather_str;
 short int sunrise_h = 8;
 short int sunrise_m = 00;  //set to 08:00 in case it fails to get weather and does not update it.
 
-//static "variables"
 
-const char* ntpServer = "pool.ntp.org";
-const char* timeZone = "Europe/Lisbon";
-
-const long gmtOffset_sec = 0;
-const int daylightOffset_sec = 3600;
-
-float temperatureC;
 //BUTTON DEBOUNCE
 bool buttonState = HIGH;             // Current state of the button
 bool lastButtonState = HIGH;         // Previous state of the button
 unsigned long lastDebounceTime = 0;  // Last time the button state changed
+bool wifiConnected = false;
 
 
-String out_text;
-String Clock_Hour_Str;
-String Clock_Min_Str;
-uint8_t Clock_Hour;
-uint8_t Clock_Min;
-int8_t Screen_Clock_Hour = -1;
-int8_t Screen_Clock_Min = -1;
-uint8_t Clock_Sec;  //only used for certain functions.
+
+uint8_t clockHour;
+uint8_t clockMin;
+int8_t screenClockHour = -1;
+int8_t screenClockMin = -1;
+uint8_t clockSec;  //only used for certain functions.
 short int LastRTCSyncTime = -1;
 
-int8_t ClockSwitchFlag = -1;
+
 bool sunrise_loop = 0;
 
-CircularBuffer<uint8_t, 100> TempDataTimeHour;
-CircularBuffer<uint8_t, 100> TempDataTimeMin;
-CircularBuffer<float, 100> TempDataSensor1;  //Actual sensor
-CircularBuffer<String, 20> TerminalBuffer;
+CircularBuffer<uint8_t, 100> tempDataHour;
+CircularBuffer<uint8_t, 100> tempDataMin;
+CircularBuffer<float, 100> tempDataSensor;  //Actual sensor
+CircularBuffer<String, 20> terminalBuffer;
 
-bool wifi_connected = 0;
 WiFiManager wm;
 
 void setup() {
+  String outText;
   sensors.begin();
 
   pinMode(buttonPin, INPUT_PULLUP);
   Serial.begin(115200);
   loadSettings(settings);
-  TerminalOutput("Settings loaded from nvs");
+  terminalOutput("Settings loaded from nvs");
   //initialization
   matrix.begin();
   matrix.setTextWrap(false);
@@ -172,9 +167,9 @@ void setup() {
   matrix.fillScreen(0);
   matrix.setFont(&Normal);
   matrix.setTextSize(1);
-  out_text = "V" + String(Version);
+  outText = "V" + String(firmwareVersion);
   matrix.setCursor(0, 7);
-  matrix.print(out_text);
+  matrix.print(outText);
   matrix.show();
   delay(1000);
   fadeOut(500);  //fadeout in milliseconds
@@ -188,13 +183,13 @@ void setup() {
   wm.setConfigPortalTimeout(120);     // Set configuration portal timeout to 60 seconds
 
   // Attempt to connect using saved credentials
-  wifiportal = wm.autoConnect("NEOCLOCK_AP");
-
+  //wifiportal = wm.autoConnect("NEOCLOCK_AP");
+  wm.autoConnect("NEOCLOCK_AP");
   //delay for wifi connection?
   matrix.setBrightness(settings.maxbrightness);
-  // out_text = "WiFi Connecting";
+  // outText = "WiFi Connecting";
   // matrix.setCursor(0, 8);
-  // matrix.print(out_text);
+  // matrix.print(outText);
   // matrix.show();
   for (int i = 0; i < 10; i++) {
 
@@ -210,16 +205,16 @@ void setup() {
 
 
   if (WiFi.status() == WL_CONNECTED) {
-    TerminalOutput("Connected to WiFi using saved credentials");
+    terminalOutput("Connected to WiFi using saved credentials");
     //Serial.println("Connected to WiFi using saved credentials");
 
-    wifi_connected = 1;
+    wifiConnected = 1;
   } else {
-    wifi_connected = 0;
+    wifiConnected = 0;
 
     //Serial.println("Failed to connect to WiFi using saved credentials");
-    TerminalOutput("Failed to connect to WiFi using saved credentials");
-    TerminalOutput("Configuration portal running");
+    terminalOutput("Failed to connect to WiFi using saved credentials");
+    terminalOutput("Configuration portal running");
     //Serial.println("Configuration portal running");
     displayIcon(no_wifi, 11, 1);
     delay(2000);
@@ -308,22 +303,22 @@ void setup() {
   matrix.setBrightness(settings.maxbrightness);
   scrollText(WiFi.localIP().toString(), 50);
 
-  //Serial.println("Setup1" + wifi_connected);
-  TerminalOutput("Setup Flag1 - wifiConnected:" + String(wifi_connected));
+  //Serial.println("Setup1" + wifiConnected);
+  terminalOutput("Setup Flag1 - wifiConnected:" + String(wifiConnected));
 
 
   rtc.begin();
   country.setPosix(C_POSIX);
 
 
-  if (wifi_connected) {
+  if (wifiConnected) {
     //if the wifi is connected, set time from WEB
     waitForSync();
     setInterval(0);  //disable the sync timer from eztime~THIS NEEDS TO BE AFTER THE Sync for some reason
 
-    TerminalOutput("time updated: " + String(lastNtpUpdateTime()));
-    Clock_Sec = country.second();
-    while (Clock_Sec == country.second()) {  //THIS IS USED TO SYNC THE SECONDS OF THE RTC WITH THE SECONDS FROM EZTIME
+    terminalOutput("time updated: " + String(lastNtpUpdateTime()));
+    clockSec = country.second();
+    while (clockSec == country.second()) {  //THIS IS USED TO SYNC THE SECONDS OF THE RTC WITH THE SECONDS FROM EZTIME
       yield();
     }
     rtc.adjust(DateTime(country.year(), country.month(), country.day(), country.hour(), country.minute(), country.second()));
@@ -333,170 +328,128 @@ void setup() {
     DateTime now = rtc.now();
     //if the wifi is not connected set time from rtc
     country.setTime(now.hour(), now.minute(), now.second(), now.day(), now.month(), now.year());
-    TerminalOutput("time set from rtc clock since wifi not connected");
+    terminalOutput("time set from rtc clock since wifi not connected");
   }
 
 
-  //if(wifi_connected){
-  Start_Web_Servers();
-  //}
-
-  //READ EEPROM STORAGE
-  EEPROM.begin(4);
-
-  EEPROM.get(0, settings.MainColor);
-  EEPROM.get(2, settings.NightColor);
-  if (!isValidColor(settings.MainColor)) {
-    settings.MainColor = 0xad75;
-  }
-  if (!isValidColor(settings.NightColor)) {
-    settings.NightColor = 0x8c71;
-  }
-
-
-  // r = random(0, 255);
-  // g = random(0, 255);
-  // b = random(0, 255);
-  RGB565TORGB(settings.MainColor, r, g, b);
-  r_tmp = r;
-  g_tmp = g;
-  b_tmp = b;
-  matrix.setTextColor(matrix.Color(r, g, b));
-  r_dec = double(r) / 25;
-  g_dec = double(g) / 23;  //green is a more powerful color
-  b_dec = double(b) / 24;
-  TerminalOutput(String(r_dec) + "|" + String(g_dec) + "|" + String(b_dec));
-
+  startWebServers();
   sensors.requestTemperatures();
   DateTime now = rtc.now();
 
-  TerminalOutput("Setup end");
+  terminalOutput("Setup end");
 }
 
 
 
 void loop() {
-  // Always process WiFi Manager, OTA updates, and the web server
-
   wm.process();
   handleButton();
   ArduinoOTA.handle();
 
-  // Check if WiFi is connected, if not, try to reconnect, wifi_millis is the time between checks
-  if (WiFi.status() != WL_CONNECTED && (millis() - wifi_millis > 120000 || wifi_millis == 0)) {
-    wifi_connected = 0;
-    server.close();  // Close all active connections
-    TerminalOutput("WiFi not connected. Attempting to reconnect...");
+  handleWifi();
 
-    //signal in the screen that wifi is not connected
-    matrix.drawPixel(31, 0, 0xf800);
-    // Try to reconnect using autoConnect() (non-blocking)
-    wm.setConfigPortalTimeout(120);
-    wifiportal = wm.autoConnect("NEOCLOCK_AP");
-    TerminalOutput("Web server started.");
-    wifi_millis = millis();
-  }
-
-  if (WiFi.status() == WL_CONNECTED && wifi_connected == 0) {
-    //Start_Web_Servers();
-
-    if (!(wifiClient.connect(WiFi.localIP(), 80)) && millis() - wifi_millis > 60000) {  //this attempts to make a connection to the own esp32 webserver, if it can't connect it continues saying the wifi is not connected.
-      wifi_connected = 0;
-      server.close();  // Close all active connections
-      TerminalOutput("stoped web pages after wifi connection");
-      Start_Web_Servers();  // restart webpages
-      TerminalOutput("started web pages after wifi connection");
-      wifi_millis = millis();
-    } else {
-      wifi_connected = 1;
-    }
-
-    matrix.drawPixel(31, 0, 0x0000);
-  } else if (WiFi.status() == WL_CONNECTED && wifi_connected == 1) {
-    server.handleClient();
-
-    if (!(wifiClient.connect(WiFi.localIP(), 80)) && millis() - wifi_millis > 60000) {  //this attempts to make a connection to the own esp32 webserver, if it can't connect it continues saying the wifi is not connected.
-      wifi_connected = 0;
-      TerminalOutput("pages are not being served");
-      server.close();       // Close all active connections
-      Start_Web_Servers();  // restart webpages
-      TerminalOutput("restarted webpages");
-    }
-  }
-
-
-  // Get the current time (you can cache it to avoid repeated calls)
+  // Get the current time
   int currentTime = country.hour() * 100 + country.minute();
-  int nightEndTime = settings.NightModeEndHour * 100 + settings.NightModeEndMin;
-  int nightStartTime = settings.NightModeStartHour * 100 + settings.NightModeStartMin;
-
-  // Determine if we are in night mode or normal mode
+  int nightEndTime = settings.nightModeEndHour * 100 + settings.nightModeEndMin;
+  int nightStartTime = settings.nightModeStartHour * 100 + settings.nightModeStartMin;
 
   bool isNight;
-
   if (nightStartTime == nightEndTime) {
-    // interpret as "never night" (or "always night" if you prefer)
     isNight = false;
-  } else if (nightStartTime > nightEndTime) {
-    // crosses midnight (e.g., 2300 -> 0700)
+  } else if (nightStartTime > nightEndTime) {  // crosses midnight
     isNight = (currentTime >= nightStartTime) || (currentTime < nightEndTime);
   } else {
-    // same-day interval (e.g., 2000 -> 2300 OR 0000 -> 0700)
     isNight = (currentTime >= nightStartTime) && (currentTime < nightEndTime);
   }
 
-  if (isNight) {
-    //NIGHT MODE
-    if (ClockSwitchFlag != 0) {
-      matrix.fillScreen(0);
-      // Night mode initialization
-      CurrentColor = settings.NightColor;
+  ClockMode newMode = isNight ? ClockMode::NIGHT : ClockMode::NORMAL;
+
+  if (newMode != currentMode || !modeInitialized) {
+    currentMode = newMode;
+    modeInitialized = true;
+    matrix.fillScreen(0);
+
+    if (currentMode == ClockMode::NIGHT) {
+      currentColor = settings.nightColor;
       matrix.setFont(&Mini_Font);
-      matrix.setTextColor(CurrentColor);  //never change the values of MainColor or NightColor (PROTECTED VALUES)
-      RGB565TORGB(settings.NightColor, r, g, b);
-      r_dec = double(r) / 25;
-      g_dec = double(g) / 23;
-      b_dec = double(b) / 24;
-      ClockSwitchFlag = 0;
-      //get sunrise and sunset time? using http://api.weatherapi.com
+      matrix.setTextColor(currentColor);
+      RGB565TORGB(settings.nightColor, r, g, b);
+      fadeStepR= double(r) / 25;
+      fadeStepG = double(g) / 23;
+      fadeStepB = double(b) / 24;
+      getWeather();
+
+    } else {
+      sunrise_loop = 0;
+      currentColor = settings.mainColor;
+      matrix.setFont(&square_big_font);
+      matrix.setTextColor(currentColor);
+      RGB565TORGB(settings.mainColor, r, g, b);
+      fadeStepR= double(r) / 25;
+      fadeStepG = double(g) / 23;
+      fadeStepB = double(b) / 24;
+      maxChannelValue = max(max(r, g), b);
       getWeather();
     }
-    // Minimalist Clock display for night mode
-    minimalist_Clock();
-
-  } else {
-    if (ClockSwitchFlag != 1) {
-      // Normal mode initialization
-      sunrise_loop = 0;
-      CurrentColor = settings.MainColor;  //the MainColor property is always the starting value of the normal clock mode, even when the randomColor flag is set
-      matrix.setFont(&square_big_font);
-      matrix.setTextColor(CurrentColor);  //never change the values of MainColor or NightColor (PROTECTED VALUES)
-
-      RGB565TORGB(settings.MainColor, r, g, b);  //this sets the r,g,b values based on the MainColor property
-      r_dec = double(r) / 25;
-      g_dec = double(g) / 23;
-      b_dec = double(b) / 24;
-
-      maxRGBValue = max(max(r, g), b);  // Use max function directly for max RGB
-      ClockSwitchFlag = 1;
-    }
-    // Normal Clock display
-    Normal_Clock();
   }
 
+  if (currentMode == ClockMode::NIGHT) {
+    minimalistClock();
+  } else {
+    normalClock();
+  }
 
   yield();
 }
 
-void Normal_Clock() {
+void handleWifi() {
+  // Not connected — attempt reconnect every 2 minutes
+  if (WiFi.status() != WL_CONNECTED && (wifi_millis == 0 || millis() - wifi_millis > 120000)) {
+    wifiConnected = false;
+    server.close();
+    matrix.drawPixel(31, 0, 0xf800);  // red pixel = no wifi
+    terminalOutput("WiFi not connected. Attempting to reconnect...");
+    wm.setConfigPortalTimeout(120);
+    wm.autoConnect("NEOCLOCK_AP");
+    wifi_millis = millis();
+    return;
+  }
+
+  // Just (re)connected — verify web server is reachable, restart if not
+  if (WiFi.status() == WL_CONNECTED && !wifiConnected) {
+    matrix.drawPixel(31, 0, 0x0000);  // clear red pixel
+    if (!wifiClient.connect(WiFi.localIP(), 80) && millis() - wifi_millis > 60000) {
+      server.close();
+      startWebServers();
+      terminalOutput("Web server restarted after reconnection");
+      wifi_millis = millis();
+    } else {
+      wifiConnected = true;
+    }
+    return;
+  }
+
+  // Connected and running — handle clients, watchdog check server health
+  if (WiFi.status() == WL_CONNECTED && wifiConnected) {
+    server.handleClient();
+    if (!wifiClient.connect(WiFi.localIP(), 80) && millis() - wifi_millis > 60000) {
+      wifiConnected = false;
+      server.close();
+      startWebServers();
+      terminalOutput("Web server restarted - was unresponsive");
+    }
+  }
+}
+
+void normalClock() {
   short int currentBrightness = matrix.getBrightness();
   unsigned long int MillisKeep;
   while (currentBrightness != settings.maxbrightness) {
     if (currentBrightness < settings.maxbrightness) {
       for (int i = currentBrightness; i < settings.maxbrightness + 1;) {
         matrix.setBrightness(i);
-        refresh_normal_clock();
-        fade_tick(16, 2, 6);
+        refreshNormalClock();
+        fadeTick(16, 2, 6);
         currentBrightness = matrix.getBrightness();
         //Serial.println("++Brightness level: " + String(i));
         i++;
@@ -505,8 +458,8 @@ void Normal_Clock() {
     } else if (currentBrightness > settings.maxbrightness) {
       for (int i = currentBrightness; i > settings.maxbrightness - 1;) {
         matrix.setBrightness(i);
-        refresh_normal_clock();
-        fade_tick(16, 2, 6);
+        refreshNormalClock();
+        fadeTick(16, 2, 6);
         currentBrightness = matrix.getBrightness();
         //Serial.println("--Brightness level: " + String(i));
         i--;
@@ -515,21 +468,21 @@ void Normal_Clock() {
     }
   }
 
-  if (Screen_Clock_Hour == country.hour() && Screen_Clock_Min == country.minute()) {
+  if (screenClockHour == country.hour() && screenClockMin == country.minute()) {
     handleButton();
     ArduinoOTA.handle();
     server.handleClient();
-    fade_tick(16, 2, 6);
+    fadeTick(16, 2, 6);
     //matrix.show();
   } else {  //CLOCK CHANGED
-    fade_tick(16, 2, 6);
-    refresh_normal_clock_slideEffect();
+    fadeTick(16, 2, 6);
+    refreshNormalClockSlideEffect();
     //temperature display every 15min starting from 5 -> 20 -> 35 -> 50
-    if (Clock_Min % 15 == 5) {
+    if (clockMin % 15 == 5) {
 
       MillisKeep = millis();
       while (millis() - MillisKeep < 5000) {
-        fade_tick(16, 2, 6);
+        fadeTick(16, 2, 6);
         //matrix.show();
       }  //delay 5 seconds
 
@@ -543,59 +496,59 @@ void Normal_Clock() {
 
       //read sensor data
       sensors.requestTemperatures();
-      TempDataTimeHour.push(country.hour());
-      TempDataTimeMin.push(country.minute());
-      TempDataSensor1.push(sensors.getTempCByIndex(0));
+      tempDataHour.push(country.hour());
+      tempDataMin.push(country.minute());
+      tempDataSensor.push(sensors.getTempCByIndex(0));
 
       //delay(5000);  //delay 5 seconds
       fadeOut(100);
       matrix.fillScreen(0);
       matrix.setBrightness(settings.maxbrightness);
       matrix.setCursor(0, 7);
-      matrix.print(String(int(TempDataSensor1.last())) + "$C");  //$ = º --> used $ to save space on the font
+      matrix.print(String(int(tempDataSensor.last())) + "$C");  //$ = º --> used $ to save space on the font
       matrix.show();
-      Screen_Clock_Min = -1;
-      Screen_Clock_Hour = -1;
+      screenClockMin = -1;
+      screenClockHour = -1;
       syncSecondsWithRTC();
       delay(5000);   //display temperature for 5 seconds
       fadeOut(100);  //fadeout temperature
       matrix.fillScreen(0);
       matrix.setBrightness(settings.maxbrightness);
-      refresh_normal_clock_slideEffect();
+      refreshNormalClockSlideEffect();
     }
   }
 }
 
-void refresh_normal_clock() {  //without any effect
-  // Serial.println("refresh_normal_clock");
+void refreshNormalClock() {  //without any effect
+  // Serial.println("refreshNormalClock");
   short int start_cursor = 4;
   short int font_width = 5;
   font_width++;  //to account for the space between characters
   short int cursor = start_cursor;
 
-  Clock_Hour = country.hour();
-  Clock_Min = country.minute();
-  Screen_Clock_Hour = Clock_Hour;
-  Screen_Clock_Min = Clock_Min;
+  clockHour = country.hour();
+  clockMin = country.minute();
+  screenClockHour = clockHour;
+  screenClockMin = clockMin;
   matrix.fillScreen(0);
   matrix.setCursor(cursor, 7);
-  matrix.print(String(Screen_Clock_Hour / 10));
+  matrix.print(String(screenClockHour / 10));
   cursor = cursor + font_width;  // Move to the next digit position
   matrix.setCursor(cursor, 7);
-  matrix.print(String(Screen_Clock_Hour % 10));
+  matrix.print(String(screenClockHour % 10));
   cursor = cursor + font_width;
   cursor = cursor + 2;  // Account for spacing between hour and minute digits
   matrix.setCursor(cursor, 7);
-  matrix.print(String(Screen_Clock_Min / 10));
+  matrix.print(String(screenClockMin / 10));
   cursor = cursor + font_width;  // Move to the next digit position
   matrix.setCursor(cursor, 7);
-  matrix.print(String(Screen_Clock_Min % 10));
+  matrix.print(String(screenClockMin % 10));
   matrix.show();
 }
 
 
-void refresh_normal_clock_slideEffect() {
-  // Serial.println("refresh_normal_clock_slideEffect");
+void refreshNormalClockSlideEffect() {
+  // Serial.println("refreshNormalClockSlideEffect");
   // Initialize variables
   short int start_cursor = 4;
   short int font_width = 5;
@@ -604,44 +557,44 @@ void refresh_normal_clock_slideEffect() {
   short int slide_timing = 5;
 
   // Get current time
-  Clock_Hour = country.hour();
-  Clock_Min = country.minute();
+  clockHour = country.hour();
+  clockMin = country.minute();
 
   if (randomColor) {  //THIS PART IS ONLY RUN IF RANDOM COLOR IS ENABLED
-    if ((Screen_Clock_Hour != Clock_Hour && Screen_Clock_Hour > 0) || (next_r + next_g + next_b) <= 10) {
-      if ((dec_next_r_calc + dec_next_g_calc + dec_next_b_calc) == 0) {
+    if ((screenClockHour != clockHour && screenClockHour > 0) || (targetR + targetG + targetB) <= 10) {
+      if ((interpolatedR + interpolatedG + interpolatedB) == 0) {
 
-        dec_next_r_calc = r;
-        dec_next_g_calc = g;
-        dec_next_b_calc = b;
+        interpolatedR = r;
+        interpolatedG = g;
+        interpolatedB = b;
       }
-      randomNextColor(maxRGBValue, 60 - Clock_Min);  //to run every hour
-      TerminalOutput("next_r:" + String(next_r) + " next_g:" + String(next_g) + " next_b:" + String(next_b) + " max rgb value:" + String(maxRGBValue));
+      randomNextColor(maxChannelValue, 60 - clockMin);  //to run every hour
+      terminalOutput("targetR:" + String(targetR) + " targetG:" + String(targetG) + " targetB:" + String(targetB) + " max rgb value:" + String(maxChannelValue));
     }
-    if (Screen_Clock_Min >= 0 && Screen_Clock_Min != Clock_Min) {  //to run every minute
+    if (screenClockMin >= 0 && screenClockMin != clockMin) {  //to run every minute
       // Update red component
-      dec_next_r_calc = (dec_next_r_calc < next_r) ? min(dec_next_r_calc + dec_next_r, float(next_r)) : max(dec_next_r_calc - dec_next_r, float(next_r));
+      interpolatedR = (interpolatedR < targetR) ? min(interpolatedR + targetStepR, float(targetR)) : max(interpolatedR - targetStepR, float(targetR));
       // Update green component
-      dec_next_g_calc = (dec_next_g_calc < next_g) ? min(dec_next_g_calc + dec_next_g, float(next_g)) : max(dec_next_g_calc - dec_next_g, float(next_g));
+      interpolatedG = (interpolatedG < targetG) ? min(interpolatedG + targetStepG, float(targetG)) : max(interpolatedG - targetStepG, float(targetG));
       // Update blue component
-      dec_next_b_calc = (dec_next_b_calc < next_b) ? min(dec_next_b_calc + dec_next_b, float(next_b)) : max(dec_next_b_calc - dec_next_b, float(next_b));
+      interpolatedB = (interpolatedB < targetB) ? min(interpolatedB + targetStepB, float(targetB)) : max(interpolatedB - targetStepB, float(targetB));
 
-      r_dec = double(r) / 25;
-      g_dec = double(g) / 25;
-      b_dec = double(b) / 25;
-      r = int(round(dec_next_r_calc));
-      g = int(round(dec_next_g_calc));
-      b = int(round(dec_next_b_calc));
-      CurrentColor = matrix.Color(r, g, b);
-      matrix.setTextColor(CurrentColor);
-      TerminalOutput("r:" + String(r) + "g:" + String(g) + "b:" + String(b));
+      fadeStepR= double(r) / 25;
+      fadeStepG = double(g) / 25;
+      fadeStepB = double(b) / 25;
+      r = int(round(interpolatedR));
+      g = int(round(interpolatedG));
+      b = int(round(interpolatedB));
+      currentColor = matrix.Color(r, g, b);
+      matrix.setTextColor(currentColor);
+      terminalOutput("r:" + String(r) + "g:" + String(g) + "b:" + String(b));
     }
   }
 
 
   // Check if the screen clock hour and minute are negative, this means the clock is not being shown on the screen so it needs a complete refresh
-  if (Screen_Clock_Hour < 0 || Screen_Clock_Min < 0) {
-    // Serial.println("refresh_normal_clock_slideEffect | Screen_Clock_Hour < 0 || Screen_Clock_Min < 0");
+  if (screenClockHour < 0 || screenClockMin < 0) {
+    // Serial.println("refreshNormalClockSlideEffect | screenClockHour < 0 || screenClockMin < 0");
     // Loop for slide effect animation
     for (int i = 0; i < 9; i++) {
       // Print blank character
@@ -650,17 +603,17 @@ void refresh_normal_clock_slideEffect() {
       matrix.setTextColor(0);
       matrix.setCursor(cursor, i + 7);
       matrix.print("#");  //blank character
-      matrix.setTextColor(CurrentColor);
+      matrix.setTextColor(currentColor);
 
       // Print tens digit of hour
-      if (Clock_Hour < 10) {
+      if (clockHour < 10) {
         matrix.setCursor(cursor, i - 1);
         matrix.setTextColor(0);
         matrix.print("#");  //blank character
-        matrix.setTextColor(CurrentColor);
+        matrix.setTextColor(currentColor);
       } else {
         matrix.setCursor(cursor, i - 1);
-        matrix.print(String(Clock_Hour / 10));
+        matrix.print(String(clockHour / 10));
       }
       cursor = cursor + font_width;  // Move to the next digit position
 
@@ -668,9 +621,9 @@ void refresh_normal_clock_slideEffect() {
       matrix.setCursor(cursor, i + 7);
       matrix.setTextColor(0);
       matrix.print("#");
-      matrix.setTextColor(CurrentColor);
+      matrix.setTextColor(currentColor);
       matrix.setCursor(cursor, i - 1);
-      matrix.print(String(Clock_Hour % 10));
+      matrix.print(String(clockHour % 10));
       cursor = cursor + font_width;
 
       // Print space between hour and minute
@@ -680,49 +633,49 @@ void refresh_normal_clock_slideEffect() {
       matrix.setCursor(cursor, i + 7);
       matrix.setTextColor(0);
       matrix.print("#");
-      matrix.setTextColor(CurrentColor);
+      matrix.setTextColor(currentColor);
       matrix.setCursor(cursor, i - 1);
-      matrix.print(String(Clock_Min / 10));
+      matrix.print(String(clockMin / 10));
       cursor = cursor + font_width;
 
       // Print ones digit of minute
       matrix.setCursor(cursor, i + 7);
       matrix.setTextColor(0);
       matrix.print("#");
-      matrix.setTextColor(CurrentColor);
+      matrix.setTextColor(currentColor);
       matrix.setCursor(cursor, i - 1);
-      matrix.print(String(Clock_Min % 10));
+      matrix.print(String(clockMin % 10));
       cursor = cursor + font_width;
 
       // Perform fade effect and update display
-      // fade_tick(16, 2, 6);
+      // fadeTick(16, 2, 6);
       // matrix.show();
       for (int d = 0; d < slide_timing; d++) {
-        fade_tick(16, i - 2, i - 6);  //to account for the slide?
+        fadeTick(16, i - 2, i - 6);  //to account for the slide?
         //matrix.show();
       }
     }
-  } else if (Clock_Hour == Screen_Clock_Hour && Clock_Min == Screen_Clock_Min) {
+  } else if (clockHour == screenClockHour && clockMin == screenClockMin) {
     for (int i = 0; i < 9; i++) {
       cursor = start_cursor;
       matrix.fillScreen(0);
 
       // Print tens digit of hour
-      if (Clock_Hour < 10) {
+      if (clockHour < 10) {
         matrix.setCursor(cursor, 7);
         matrix.setTextColor(0);
         matrix.print("#");  //blank character
-        matrix.setTextColor(CurrentColor);
+        matrix.setTextColor(currentColor);
       } else {
         matrix.setCursor(cursor, 7);
-        matrix.print(String(Clock_Hour / 10));
+        matrix.print(String(clockHour / 10));
       }
 
       cursor = cursor + font_width;  // Move to the next digit position
 
       // Print ones digit of hour
       matrix.setCursor(cursor, 7);
-      matrix.print(String(Clock_Hour % 10));
+      matrix.print(String(clockHour % 10));
       cursor = cursor + font_width;
 
       // Print space between hour and minute
@@ -730,21 +683,21 @@ void refresh_normal_clock_slideEffect() {
 
       // Print tens digit of minute
       matrix.setCursor(cursor, 7);
-      matrix.print(String(Clock_Min / 10));
+      matrix.print(String(clockMin / 10));
       cursor = cursor + font_width;
 
       // Print ones digit of minute
       matrix.setCursor(cursor, 7);
-      matrix.print(String(Clock_Min % 10));
+      matrix.print(String(clockMin % 10));
       cursor = cursor + font_width;
 
       for (int d = 0; d < slide_timing; d++) {
-        fade_tick(16, 2, 6);
+        fadeTick(16, 2, 6);
         //matrix.show();
       }
     }
-  } else if ((Clock_Hour / 10) != Screen_Clock_Hour / 10) {
-    // Serial.println("refresh_normal_clock_slideEffect | (Clock_Hour / 10) != Screen_Clock_Hour / 10");
+  } else if ((clockHour / 10) != screenClockHour / 10) {
+    // Serial.println("refreshNormalClockSlideEffect | (clockHour / 10) != screenClockHour / 10");
     // Loop for slide effect animation if tens digit of hour changes
     for (int i = 0; i < 9; i++) {
       cursor = start_cursor;
@@ -752,25 +705,25 @@ void refresh_normal_clock_slideEffect() {
 
       // Print tens digit of hour
       matrix.setCursor(cursor, i + 7);
-      matrix.print(String(Screen_Clock_Hour / 10));
+      matrix.print(String(screenClockHour / 10));
 
-      if (Clock_Hour < 10) {
+      if (clockHour < 10) {
         matrix.setCursor(cursor, i - 1);
         matrix.setTextColor(0);
         matrix.print("#");  //blank character
-        matrix.setTextColor(CurrentColor);
+        matrix.setTextColor(currentColor);
       } else {
         matrix.setCursor(cursor, i - 1);
-        matrix.print(String(Clock_Hour / 10));
+        matrix.print(String(clockHour / 10));
       }
 
       cursor = cursor + font_width;  // Move to the next digit position
 
       // Print ones digit of hour
       matrix.setCursor(cursor, i + 7);
-      matrix.print(String(Screen_Clock_Hour % 10));
+      matrix.print(String(screenClockHour % 10));
       matrix.setCursor(cursor, i - 1);
-      matrix.print(String(Clock_Hour % 10));
+      matrix.print(String(clockHour % 10));
       cursor = cursor + font_width;
 
       // Print space between hour and minute
@@ -778,48 +731,48 @@ void refresh_normal_clock_slideEffect() {
 
       // Print tens digit of minute
       matrix.setCursor(cursor, i + 7);
-      matrix.print(String(Screen_Clock_Min / 10));
+      matrix.print(String(screenClockMin / 10));
       matrix.setCursor(cursor, i - 1);
-      matrix.print(String(Clock_Min / 10));
+      matrix.print(String(clockMin / 10));
       cursor = cursor + font_width;
 
       // Print ones digit of minute
       matrix.setCursor(cursor, i + 7);
-      matrix.print(String(Screen_Clock_Min % 10));
+      matrix.print(String(screenClockMin % 10));
       matrix.setCursor(cursor, i - 1);
-      matrix.print(String(Clock_Min % 10));
+      matrix.print(String(clockMin % 10));
       cursor = cursor + font_width;
 
       for (int d = 0; d < slide_timing; d++) {
-        fade_tick(16, 2, 6);
+        fadeTick(16, 2, 6);
         //matrix.show();
       }
     }
-  } else if (Clock_Hour % 10 != Screen_Clock_Hour % 10) {
-    // Serial.println("refresh_normal_clock_slideEffect | Clock_Hour % 10 != Screen_Clock_Hour % 10) ");
+  } else if (clockHour % 10 != screenClockHour % 10) {
+    // Serial.println("refreshNormalClockSlideEffect | clockHour % 10 != screenClockHour % 10) ");
     // Loop for slide effect animation if ones digit of hour changes
     for (int i = 0; i < 9; i++) {
       cursor = start_cursor;
       matrix.fillScreen(0);
 
       // Print tens digit of hour
-      if (Clock_Hour < 10) {
+      if (clockHour < 10) {
         matrix.setCursor(cursor, 7);
         matrix.setTextColor(0);
         matrix.print("#");  //blank character
-        matrix.setTextColor(CurrentColor);
+        matrix.setTextColor(currentColor);
       } else {
         matrix.setCursor(cursor, 7);
-        matrix.print(String(Clock_Hour / 10));
+        matrix.print(String(clockHour / 10));
       }
 
       cursor = cursor + font_width;  // Move to the next digit position
 
       // Print ones digit of hour
       matrix.setCursor(cursor, i + 7);
-      matrix.print(String(Screen_Clock_Hour % 10));
+      matrix.print(String(screenClockHour % 10));
       matrix.setCursor(cursor, i - 1);
-      matrix.print(String(Clock_Hour % 10));
+      matrix.print(String(clockHour % 10));
       cursor = cursor + font_width;
 
       // Print space between hour and minute
@@ -827,46 +780,46 @@ void refresh_normal_clock_slideEffect() {
 
       // Print tens digit of minute
       matrix.setCursor(cursor, i + 7);
-      matrix.print(String(Screen_Clock_Min / 10));
+      matrix.print(String(screenClockMin / 10));
       matrix.setCursor(cursor, i - 1);
-      matrix.print(String(Clock_Min / 10));
+      matrix.print(String(clockMin / 10));
       cursor = cursor + font_width;
 
       // Print ones digit of minute
       matrix.setCursor(cursor, i + 7);
-      matrix.print(String(Screen_Clock_Min % 10));
+      matrix.print(String(screenClockMin % 10));
       matrix.setCursor(cursor, i - 1);
-      matrix.print(String(Clock_Min % 10));
+      matrix.print(String(clockMin % 10));
       cursor = cursor + font_width;
 
       for (int d = 0; d < slide_timing; d++) {
-        fade_tick(16, 2, 6);
+        fadeTick(16, 2, 6);
         //matrix.show();
       }
     }
-  } else if (Clock_Min / 10 != Screen_Clock_Min / 10) {
-    // Serial.println("refresh_normal_clock_slideEffect |(Clock_Min / 10 != Screen_Clock_Min / 10)");
+  } else if (clockMin / 10 != screenClockMin / 10) {
+    // Serial.println("refreshNormalClockSlideEffect |(clockMin / 10 != screenClockMin / 10)");
     // Loop for slide effect animation if tens digit of minute changes
     for (int i = 0; i < 9; i++) {
       cursor = start_cursor;
       matrix.fillScreen(0);
 
       // Print tens digit of hour
-      if (Clock_Hour < 10) {
+      if (clockHour < 10) {
         matrix.setCursor(cursor, 7);
         matrix.setTextColor(0);
         matrix.print("#");  //blank character
-        matrix.setTextColor(CurrentColor);
+        matrix.setTextColor(currentColor);
       } else {
         matrix.setCursor(cursor, 7);
-        matrix.print(String(Clock_Hour / 10));
+        matrix.print(String(clockHour / 10));
       }
 
       cursor = cursor + font_width;  // Move to the next digit position
 
       // Print ones digit of hour
       matrix.setCursor(cursor, 7);
-      matrix.print(String(Clock_Hour % 10));
+      matrix.print(String(clockHour % 10));
       cursor = cursor + font_width;
 
       // Print space between hour and minute
@@ -874,48 +827,48 @@ void refresh_normal_clock_slideEffect() {
 
       // Print tens digit of minute
       matrix.setCursor(cursor, i + 7);
-      matrix.print(String(Screen_Clock_Min / 10));
+      matrix.print(String(screenClockMin / 10));
       matrix.setCursor(cursor, i - 1);
-      matrix.print(String(Clock_Min / 10));
+      matrix.print(String(clockMin / 10));
       cursor = cursor + font_width;
 
       // Print ones digit of minute
       matrix.setCursor(cursor, i + 7);
-      matrix.print(String(Screen_Clock_Min % 10));
+      matrix.print(String(screenClockMin % 10));
       matrix.setCursor(cursor, i - 1);
-      matrix.print(String(Clock_Min % 10));
+      matrix.print(String(clockMin % 10));
       cursor = cursor + font_width;
 
       // Perform fade effect and update display
-      // fade_tick(16, 2, 6);
+      // fadeTick(16, 2, 6);
       // matrix.show();
       for (int d = 0; d < slide_timing; d++) {
-        fade_tick(16, 2, 6);
+        fadeTick(16, 2, 6);
         //matrix.show();
       }
     }
-  } else if (Clock_Min % 10 != Screen_Clock_Min % 10) {
+  } else if (clockMin % 10 != screenClockMin % 10) {
     // Loop for slide effect animation if ones digit of minute changes
     for (int i = 0; i < 9; i++) {
       cursor = start_cursor;
       matrix.fillScreen(0);
 
       // Print tens digit of hour
-      if (Clock_Hour < 10) {
+      if (clockHour < 10) {
         matrix.setCursor(cursor, 7);
         matrix.setTextColor(0);
         matrix.print("#");  //blank character
-        matrix.setTextColor(CurrentColor);
+        matrix.setTextColor(currentColor);
       } else {
         matrix.setCursor(cursor, 7);
-        matrix.print(String(Clock_Hour / 10));
+        matrix.print(String(clockHour / 10));
       }
 
       cursor = cursor + font_width;  // Move to the next digit position
 
       // Print ones digit of hour
       matrix.setCursor(cursor, 7);
-      matrix.print(String(Clock_Hour % 10));
+      matrix.print(String(clockHour % 10));
       cursor = cursor + font_width;
 
       // Print space between hour and minute
@@ -923,41 +876,41 @@ void refresh_normal_clock_slideEffect() {
 
       // Print tens digit of minute
       matrix.setCursor(cursor, 7);
-      matrix.print(String(Clock_Min / 10));
+      matrix.print(String(clockMin / 10));
       cursor = cursor + font_width;
 
       // Print ones digit of minute
       matrix.setCursor(cursor, i + 7);
-      matrix.print(String(Screen_Clock_Min % 10));
+      matrix.print(String(screenClockMin % 10));
       matrix.setCursor(cursor, i - 1);
-      matrix.print(String(Clock_Min % 10));
+      matrix.print(String(clockMin % 10));
       cursor = cursor + font_width;
 
       // Perform fade effect and update display
-      // fade_tick(16, 2, 6);
+      // fadeTick(16, 2, 6);
       // matrix.show();
       for (int d = 0; d < slide_timing; d++) {
-        fade_tick(16, 2, 6);
+        fadeTick(16, 2, 6);
         // matrix.show();
       }
     }
   }
 
   // Update screen clock hour and minute
-  Screen_Clock_Hour = Clock_Hour;
-  Screen_Clock_Min = Clock_Min;
+  screenClockHour = clockHour;
+  screenClockMin = clockMin;
 }
 
 void tick(short int x_loc, short int y_loc_led1, short int y_loc_led2) {
   short int correction;
   if ((millis() - tmp_millis) > 500 && (millis() - tmp_millis) <= 1000) {
-    r_tmp = r;
-    g_tmp = g;
-    b_tmp = b;
+    fadeCurrentR = r;
+    fadeCurrentG = g;
+    fadeCurrentB = b;
   } else if ((millis() - tmp_millis) < 500 && (millis() - tmp_millis) <= 1000) {
-    r_tmp = 0;
-    g_tmp = 0;
-    b_tmp = 0;
+    fadeCurrentR = 0;
+    fadeCurrentG = 0;
+    fadeCurrentB = 0;
 
   } else if (((millis() - tmp_millis) > 1000) && ((millis() - tmp_millis) < 1999)) {
     correction = 1000 - (millis() - tmp_millis);
@@ -967,42 +920,42 @@ void tick(short int x_loc, short int y_loc_led1, short int y_loc_led2) {
                                            // tmp_millis = millis();
   }
 
-  uint16_t color = matrix.Color(int(r_tmp), int(g_tmp), int(b_tmp));
+  uint16_t color = matrix.Color(int(fadeCurrentR), int(fadeCurrentG), int(fadeCurrentB));
   matrix.drawPixel(x_loc, y_loc_led1, color);
   matrix.drawPixel(x_loc, y_loc_led2, color);
   matrix.show();
 }
 
-void fade_tick(short int x_loc, short int y_loc_led1, short int y_loc_led2) {
+void fadeTick(short int x_loc, short int y_loc_led1, short int y_loc_led2) {
 
   short int correction;
 
   if ((millis() - tmp_millis) > 500 && (millis() - tmp_millis) <= 1000) {
-    if (r_tmp != r) {
-      r_dec = double(r) / 23;
-      r_tmp = (r_tmp + r_dec <= r) ? (r_tmp + r_dec) : r;
+    if (fadeCurrentR != r) {
+      fadeStepR= double(r) / 23;
+      fadeCurrentR = (fadeCurrentR + fadeStepR<= r) ? (fadeCurrentR + fadeStepR) : r;
     }
-    if (g_tmp != g) {
-      g_dec = double(g) / 25;
-      g_tmp = (g_tmp + g_dec <= g) ? (g_tmp + g_dec) : g;
+    if (fadeCurrentG != g) {
+      fadeStepG = double(g) / 25;
+      fadeCurrentG = (fadeCurrentG + fadeStepG <= g) ? (fadeCurrentG + fadeStepG) : g;
     }
-    if (b_tmp != b) {
-      b_dec = double(b) / 24;
-      b_tmp = (b_tmp + b_dec <= b) ? (b_tmp + b_dec) : b;
+    if (fadeCurrentB != b) {
+      fadeStepB = double(b) / 24;
+      fadeCurrentB = (fadeCurrentB + fadeStepB <= b) ? (fadeCurrentB + fadeStepB) : b;
     }
     //fade in tick until 500miliseconds (1/2 second)
   } else if ((millis() - tmp_millis) < 500 && (millis() - tmp_millis) <= 1000) {
-    if (r_tmp != 0) {
-      r_dec = double(r) / 25;
-      r_tmp = (r_tmp - r_dec >= 0) ? (r_tmp - r_dec) : 0;
+    if (fadeCurrentR != 0) {
+      fadeStepR= double(r) / 25;
+      fadeCurrentR = (fadeCurrentR - fadeStepR>= 0) ? (fadeCurrentR - fadeStepR) : 0;
     }
-    if (g_tmp != 0) {
-      g_dec = double(g) / 23;
-      g_tmp = (g_tmp - g_dec >= 0) ? (g_tmp - g_dec) : 0;
+    if (fadeCurrentG != 0) {
+      fadeStepG = double(g) / 23;
+      fadeCurrentG = (fadeCurrentG - fadeStepG >= 0) ? (fadeCurrentG - fadeStepG) : 0;
     }
-    if (b_tmp != 0) {
-      b_dec = double(b) / 24;
-      b_tmp = (b_tmp - b_dec >= 0) ? (b_tmp - b_dec) : 0;
+    if (fadeCurrentB != 0) {
+      fadeStepB = double(b) / 24;
+      fadeCurrentB = (fadeCurrentB - fadeStepB >= 0) ? (fadeCurrentB - fadeStepB) : 0;
     }
     //fade out tick until 1000miliseconds (full second)
   } else if (((millis() - tmp_millis) > 1000) && ((millis() - tmp_millis) < 1999)) {
@@ -1013,25 +966,25 @@ void fade_tick(short int x_loc, short int y_loc_led1, short int y_loc_led2) {
     tmp_millis = millis() + country.ms();  //correct it with ms from eztime
   }
 
-  uint16_t color = matrix.Color(int(r_tmp), int(g_tmp), int(b_tmp));
+  uint16_t color = matrix.Color(int(fadeCurrentR), int(fadeCurrentG), int(fadeCurrentB));
   matrix.drawPixel(x_loc, y_loc_led1, color);
   matrix.drawPixel(x_loc, y_loc_led2, color);
   matrix.show();
 }
 
-void randomNextColor(uint8_t maxRGBValue, int minutes_to_target) {
-  // Generate a random component value equal to maxRGBValue
+void randomNextColor(uint8_t maxChannelValue, int minutes_to_target) {
+  // Generate a random component value equal to maxChannelValue
   uint8_t randomComponentIndex = random(3);
-  next_r = (randomComponentIndex == 0) ? maxRGBValue : random(maxRGBValue);
-  next_g = (randomComponentIndex == 1) ? maxRGBValue : random(maxRGBValue);
-  next_b = (randomComponentIndex == 2) ? maxRGBValue : random(maxRGBValue);
+  targetR = (randomComponentIndex == 0) ? maxChannelValue : random(maxChannelValue);
+  targetG = (randomComponentIndex == 1) ? maxChannelValue : random(maxChannelValue);
+  targetB = (randomComponentIndex == 2) ? maxChannelValue : random(maxChannelValue);
 
-  dec_next_r = (float)abs(r - next_r) / minutes_to_target;
-  dec_next_g = (float)abs(g - next_g) / minutes_to_target;
-  dec_next_b = (float)abs(b - next_b) / minutes_to_target;
+  targetStepR = (float)abs(r - targetR) / minutes_to_target;
+  targetStepG = (float)abs(g - targetG) / minutes_to_target;
+  targetStepB = (float)abs(b - targetB) / minutes_to_target;
 }
 
-void minimalist_Clock() {
+void minimalistClock() {
 
   matrix.setBrightness(settings.maxbrightness);
   //matrix.setTextColor(matrix.Color(r, g, b));
@@ -1045,27 +998,27 @@ void minimalist_Clock() {
     tickXLoc = 8;
   }
 
-  if (Clock_Hour == country.hour() && Clock_Min == country.minute()) {  //clock_hour and clock_min didnt change
-    minimalistic_Tick(tickXLoc, 4, 6);
+  if (clockHour == country.hour() && clockMin == country.minute()) {  //clockHour and clockMin didnt change
+    minimalisticTick(tickXLoc, 4, 6);
 
-    if (Clock_Min % 15 == 5) {  //every 15 minutes
-      if (Clock_Hour < 10) {    //cursor changes depending on the digits of the clock since before 10h it is offset by 4
-        cursor = 17;            //the c gets cut off but at least it fits
+    if (clockMin % 15 == 5) {  //every 15 minutes
+      if (clockHour < 10) {    //cursor changes depending on the digits of the clock since before 10h it is offset by 4
+        cursor = 17;           //the c gets cut off but at least it fits
       } else {
         cursor = 20;
       }
-      if (last_tempreading != Clock_Min) {
+      if (last_tempreading != clockMin) {
         // this part is only supposed to run once every 15 minutes
         sensors.requestTemperatures();  //request temperatures twice because the sensor seems to retain info from the last reading in the first request
         sensors.requestTemperatures();
-        TempDataTimeHour.push(country.hour());             //push hour to an array that stores the 100 time and temperatures
-        TempDataTimeMin.push(country.minute());            //push minutes
-        TempDataSensor1.push(sensors.getTempCByIndex(0));  //push temperature
+        tempDataHour.push(country.hour());                //push hour to an array that stores the 100 time and temperatures
+        tempDataMin.push(country.minute());               //push minutes
+        tempDataSensor.push(sensors.getTempCByIndex(0));  //push temperature
 
-        last_tempreading = Clock_Min;                                     //update the last reading time
-        matrix.setCursor(cursor, 4);                                      //set the cursor for the matrix print.
-        matrix.print(String(int(round(TempDataSensor1.last()))) + "ºC");  //print on the screen the temperature
-        ShowTemp = millis();                                              //the start time of the temperature display
+        last_tempreading = clockMin;                                     //update the last reading time
+        matrix.setCursor(cursor, 4);                                     //set the cursor for the matrix print.
+        matrix.print(String(int(round(tempDataSensor.last()))) + "ºC");  //print on the screen the temperature
+        ShowTemp = millis();                                             //the start time of the temperature display
         if (ShowTemp == 0) {
           ShowTemp = 1;  //in the unlikely event (1milisecond is not gonna matter)
         }
@@ -1074,7 +1027,7 @@ void minimalist_Clock() {
         matrix.setCursor(cursor, 4);
         matrix.setTextColor(0);
         matrix.print("####");
-        matrix.setTextColor(CurrentColor);
+        matrix.setTextColor(currentColor);
         //Serial.println("CLEARING SCREEN");
         ShowTemp = 0;
       }
@@ -1082,105 +1035,105 @@ void minimalist_Clock() {
 
   } else {  //clock changed
 
-    if (Clock_Min % 35 == 0) {
+    if (clockMin % 35 == 0) {
       syncSecondsWithRTC();  //sync seconds every hour at the 35 min
     }
 
-    Clock_Hour = country.hour();
-    Clock_Min = country.minute();
-    int nowMinutes = Clock_Hour * 60 + Clock_Min;
-    int sunriseMinutes = (sunrise_h * 60 + sunrise_m) - 15; //we want the loop to start 15 min before the sunrise hour
+    clockHour = country.hour();
+    clockMin = country.minute();
+    int nowMinutes = clockHour * 60 + clockMin;
+    int sunriseMinutes = (sunrise_h * 60 + sunrise_m) - 15;  //we want the loop to start 15 min before the sunrise hour
     int sunriseEndMinutes = sunriseMinutes + 60;
     //if the time is between the sunset window.
     if (nowMinutes >= sunriseMinutes && nowMinutes < sunriseEndMinutes) {
 
       if (sunrise_loop == 0) {  //first run
         // Convert colors
-        RGB565TORGB(settings.MainColor, next_r, next_g, next_b);
-        RGB565TORGB(settings.NightColor, r, g, b);
+        RGB565TORGB(settings.mainColor, targetR, targetG, targetB);
+        RGB565TORGB(settings.nightColor, r, g, b);
 
         //calculate minutes to reach target
         int dec_target_time = sunriseEndMinutes - nowMinutes;
         if (dec_target_time < 1) dec_target_time = 1;
         // Calculate step sizes for each color component
-        dec_next_r = (float)abs(r - next_r) / dec_target_time;
-        dec_next_g = (float)abs(g - next_g) / dec_target_time;
-        dec_next_b = (float)abs(b - next_b) / dec_target_time;
+        targetStepR = (float)abs(r - targetR) / dec_target_time;
+        targetStepG = (float)abs(g - targetG) / dec_target_time;
+        targetStepB = (float)abs(b - targetB) / dec_target_time;
 
         // Initialize calculation variables
-        dec_next_r_calc = r;
-        dec_next_g_calc = g;
-        dec_next_b_calc = b;
+        interpolatedR = r;
+        interpolatedG = g;
+        interpolatedB = b;
 
         sunrise_loop = 1;
       }
 
       // Gradually move each color component towards target
-      if (dec_next_r_calc < next_r) dec_next_r_calc += dec_next_r;
-      else if (dec_next_r_calc > next_r) dec_next_r_calc -= dec_next_r;
+      if (interpolatedR < targetR) interpolatedR += targetStepR;
+      else if (interpolatedR > targetR) interpolatedR -= targetStepR;
 
-      if (dec_next_g_calc < next_g) dec_next_g_calc += dec_next_g;
-      else if (dec_next_g_calc > next_g) dec_next_g_calc -= dec_next_g;
+      if (interpolatedG < targetG) interpolatedG += targetStepG;
+      else if (interpolatedG > targetG) interpolatedG -= targetStepG;
 
-      if (dec_next_b_calc < next_b) dec_next_b_calc += dec_next_b;
-      else if (dec_next_b_calc > next_b) dec_next_b_calc -= dec_next_b;
+      if (interpolatedB < targetB) interpolatedB += targetStepB;
+      else if (interpolatedB > targetB) interpolatedB -= targetStepB;
 
       // Convert to integers and set color
-      r = int(dec_next_r_calc);
-      g = int(dec_next_g_calc);
-      b = int(dec_next_b_calc);
+      r = int(interpolatedR);
+      g = int(interpolatedG);
+      b = int(interpolatedB);
 
-      CurrentColor = matrix.Color(r, g, b);
-      TerminalOutput("r:" + String(r) + "g:" + String(g) + "b:" + String(b) + " | Target: " + String(next_r) + "," + String(next_g) + "," + String(next_b));
-      matrix.setTextColor(CurrentColor);
+      currentColor = matrix.Color(r, g, b);
+      terminalOutput("r:" + String(r) + "g:" + String(g) + "b:" + String(b) + " | Target: " + String(targetR) + "," + String(targetG) + "," + String(targetB));
+      matrix.setTextColor(currentColor);
     } else {
       if (sunrise_loop == 0) {
         //SUNRISE LOOP HAS NOT RUN
-        RGB565TORGB(settings.NightColor, r, g, b);
-        CurrentColor = matrix.Color(r, g, b);
-        matrix.setTextColor(CurrentColor);
+        RGB565TORGB(settings.nightColor, r, g, b);
+        currentColor = matrix.Color(r, g, b);
+        matrix.setTextColor(currentColor);
       } else {
         sunrise_loop = 1;
-        RGB565TORGB(settings.MainColor, r, g, b);
-        CurrentColor = matrix.Color(r, g, b);
-        matrix.setTextColor(CurrentColor);
+        RGB565TORGB(settings.mainColor, r, g, b);
+        currentColor = matrix.Color(r, g, b);
+        matrix.setTextColor(currentColor);
       }
     }
 
 
     matrix.fillScreen(0);
     //draw clock
-    if (Clock_Hour < 10) {
+    if (clockHour < 10) {
       cursor = 0;
       matrix.setCursor(cursor, 7);
-      matrix.print(String(Clock_Hour % 10));
+      matrix.print(String(clockHour % 10));
       cursor = cursor + 2;
     } else {
       cursor = 0;
       matrix.setCursor(cursor, 7);
-      matrix.print(String(Clock_Hour / 10));
+      matrix.print(String(clockHour / 10));
 
       cursor = cursor + 3;
       cursor++;
       matrix.setCursor(cursor, 7);
-      matrix.print(String(Clock_Hour % 10));
+      matrix.print(String(clockHour % 10));
       cursor = cursor + 2;
     }
     cursor = cursor + 3;
     cursor++;
     matrix.setCursor(cursor, 7);
-    matrix.print(String(Clock_Min / 10));
+    matrix.print(String(clockMin / 10));
 
     cursor = cursor + 3;
     cursor++;
     matrix.setCursor(cursor, 7);
-    matrix.print(String(Clock_Min % 10));
+    matrix.print(String(clockMin % 10));
 
     matrix.show();
   }
 }
 
-void minimalistic_Tick(short int x_loc, short int y_loc_led1, short int y_loc_led2) {
+void minimalisticTick(short int x_loc, short int y_loc_led1, short int y_loc_led2) {
   uint16_t color = matrix.Color(int(r), int(g), int(b));
   short int correction;
   if ((millis() - tmp_millis) > 500 && (millis() - tmp_millis) <= 1000) {
@@ -1228,11 +1181,11 @@ void handleButton() {
         // r = random(0, 255);
         // g = random(0, 255);
         // b = random(0, 255);
-        // r_dec = double(r) / 25;
-        // g_dec = double(g) / 25;
-        // b_dec = double(b) / 25;
+        // fadeStepR= double(r) / 25;
+        // fadeStepG = double(g) / 25;
+        // fadeStepB = double(b) / 25;
         // matrix.setTextColor(matrix.Color(r, g, b));
-        // TerminalOutput("Button Pressed!");
+        // terminalOutput("Button Pressed!");
 
         getWeather();
         fadeOut(100);
@@ -1256,17 +1209,17 @@ void syncSecondsWithRTC() {
     DateTime rtcTime = rtc.now();
 
     if (rtcTime.hour() != country.hour()) {
-      TerminalOutput("rtc hour different than internal hour");
+      terminalOutput("rtc hour different than internal hour");
       DateTime rtcTime = rtc.now();
       rtc.adjust(DateTime(country.year(), country.month(), country.day(), country.hour(), country.minute(), rtcTime.second()));
-      TerminalOutput("rtc hour adjusted");
+      terminalOutput("rtc hour adjusted");
       rtcTime = rtc.now();
     }
 
     unsigned long unixTime = rtcTime.unixtime();  // Get Unix timestamp from RTC
     country.setTime(unixTime);                    // Sync ezTime to RTC time
     LastRTCSyncTime = country.hour() * 100 + country.minute();
-    TerminalOutput("time synced with rtc");
+    terminalOutput("time synced with rtc");
   }
 }
 
@@ -1367,7 +1320,7 @@ void scrollText(String text, int speed) {
   delay(speed * 10);  // Adjust this multiplier to change the pause between scrolls
 }
 
-void Server_SaveColor() {
+void serverSaveColor() {
   if (server.hasArg("Base_color") && server.hasArg("Night_color")) {
     String Base_color = server.arg("Base_color");
     String Night_color = server.arg("Night_color");
@@ -1379,29 +1332,25 @@ void Server_SaveColor() {
     r = server_r;
     g = server_g;
     b = server_b;
-    maxRGBValue = max(max(r, g), b);  // Use max function directly for max RGB
+    maxChannelValue = max(max(r, g), b);  // Use max function directly for max RGB
     if (randomColor) {
-      next_r = next_b = next_g = 0;
+      targetR = targetB = targetG = 0;
     }
 
-    dec_next_r_calc = 0;  //this is used for the random color assignment
-    dec_next_g_calc = 0;
-    dec_next_b_calc = 0;
-    r_dec = double(r) / 25;
-    g_dec = double(g) / 25;
-    b_dec = double(b) / 25;
-    settings.MainColor = matrix.Color(r, g, b);
+    interpolatedR = 0;  //this is used for the random color assignment
+    interpolatedG = 0;
+    interpolatedB = 0;
+    fadeStepR= double(r) / 25;
+    fadeStepG = double(g) / 25;
+    fadeStepB = double(b) / 25;
+    settings.mainColor = matrix.Color(r, g, b);
 
     server_r = (int)strtol(&Night_color[1], NULL, 16) >> 16 & 0xFF;
     server_g = (int)strtol(&Night_color[1], NULL, 16) >> 8 & 0xFF;
     server_b = (int)strtol(&Night_color[1], NULL, 16) & 0xFF;
 
-    settings.NightColor = matrix.Color(server_r, server_g, server_b);
-    EEPROM.put(0, settings.MainColor);
-    EEPROM.put(2, settings.NightColor);
-    EEPROM.commit();
-    //matrix.setBrightness(server_brightness);
-    //setBrightness(server_brightness);
+    settings.nightColor = matrix.Color(server_r, server_g, server_b);
+
     fadeOut(200);
 
     server.send(200, "text/plain", "Color set successfully");
@@ -1413,11 +1362,12 @@ void Server_SaveColor() {
 }
 
 
-void TestColor() {
+void testColor() {
+  String outText;
   if (server.hasArg("type") && server.hasArg("color")) {
     if (server.arg("type") == "base") {
-      Screen_Clock_Hour = 88;
-      Screen_Clock_Min = 88;
+      screenClockHour = 88;
+      screenClockMin = 88;
       String color = server.arg("color");
       //RGB565TORGB(color,server_r,server_g,server_b);
 
@@ -1435,15 +1385,15 @@ void TestColor() {
       while (millis() < time_to_reach) {
         matrix.setFont(&square_big_font);
         matrix.fillScreen(0);
-        out_text = "88:88";
+        outText = "88:88";
         matrix.setCursor(4, 7);
-        matrix.print(out_text);
+        matrix.print(outText);
         matrix.show();
       }
       loop();
     } else if (server.arg("type") == "night") {
-      Screen_Clock_Hour = 88;
-      Screen_Clock_Min = 88;
+      screenClockHour = 88;
+      screenClockMin = 88;
       String color = server.arg("color");
 
       int server_r = (int)strtol(&color[1], NULL, 16) >> 16 & 0xFF;
@@ -1460,9 +1410,9 @@ void TestColor() {
       while (millis() < time_to_reach) {
         matrix.setFont(&Mini_Font);
         matrix.fillScreen(0);
-        out_text = "88:88";
+        outText = "88:88";
         matrix.setCursor(0, 7);
-        matrix.print(out_text);
+        matrix.print(outText);
         matrix.show();
       }
       loop();
@@ -1517,7 +1467,7 @@ bool isValidColor(uint16_t color) {
   return (red <= 0x1F && green <= 0x3F && blue <= 0x1F);
 }
 
-void Start_Web_Servers() {
+void startWebServers() {
   server.on("/", HTTP_GET, []() {
     unsigned long currentTime = millis();
     unsigned long days = currentTime / 86400000;  // 1 day = 24 * 60 * 60 * 1000 milliseconds
@@ -1530,39 +1480,39 @@ void Start_Web_Servers() {
 
 
     sensors.requestTemperatures();
-    if (TempDataTimeHour.size() == 0) {
-      TempDataTimeHour.push(country.hour());
-      TempDataTimeMin.push(country.minute());
-      TempDataSensor1.push(sensors.getTempCByIndex(0));
+    if (tempDataHour.size() == 0) {
+      tempDataHour.push(country.hour());
+      tempDataMin.push(country.minute());
+      tempDataSensor.push(sensors.getTempCByIndex(0));
     }
     DateTime now = rtc.now();
 
     String formattedTimeString, formattedTempDataSensor1, formattedTerminalOutput;
 
-    for (size_t i = 0; i < TempDataTimeHour.size(); ++i) {
+    for (size_t i = 0; i < tempDataHour.size(); ++i) {
       // Concatenate hour and minute with a colon
-      formattedTimeString += (TempDataTimeHour[i] < 10 ? "0" + String(TempDataTimeHour[i]) : String(TempDataTimeHour[i])) + ":" + (TempDataTimeMin[i] < 10 ? "0" + String(TempDataTimeMin[i]) : String(TempDataTimeMin[i]));
-      formattedTempDataSensor1 += String(TempDataSensor1[i]);
+      formattedTimeString += (tempDataHour[i] < 10 ? "0" + String(tempDataHour[i]) : String(tempDataHour[i])) + ":" + (tempDataMin[i] < 10 ? "0" + String(tempDataMin[i]) : String(tempDataMin[i]));
+      formattedTempDataSensor1 += String(tempDataSensor[i]);
       // Add comma if not the last element
-      if (i != TempDataTimeHour.size() - 1) {
+      if (i != tempDataHour.size() - 1) {
         formattedTimeString += ",";
         formattedTempDataSensor1 += ",";
       }
     }
-    for (size_t i = 0; i < TerminalBuffer.size(); ++i) {
-      formattedTerminalOutput += TerminalBuffer[i] + "\n";
+    for (size_t i = 0; i < terminalBuffer.size(); ++i) {
+      formattedTerminalOutput += terminalBuffer[i] + "\n";
     }
     String page = String(MAIN_page);
     page.replace("{{WiFi}}", WiFi.SSID());
     page.replace("{{IP}}", WiFi.localIP().toString());
-    page.replace("{{MAXBRIGHTNESS}}", String(settings.maxbrightness));
+    page.replace("{{MAX_BRIGHTNESS}}", String(settings.maxbrightness));
     page.replace("{{POSIX}}", String(C_POSIX));
-    page.replace("{{NIGHTCLOCKSTART}}", String(settings.NightModeStartHour < 10 ? "0" + String(settings.NightModeStartHour) : String(settings.NightModeStartHour)) + ":" + String(settings.NightModeStartMin < 10 ? "0" + String(settings.NightModeStartMin) : String(settings.NightModeStartMin)));
-    page.replace("{{NIGHTCLOCKEND}}", String(settings.NightModeEndHour < 10 ? "0" + String(settings.NightModeEndHour) : String(settings.NightModeEndHour)) + ":" + String(settings.NightModeEndMin < 10 ? "0" + String(settings.NightModeEndMin) : String(settings.NightModeEndMin)));
-    page.replace("{{MAINCOLOR}}", "#" + String(RGB565toRGB888(settings.MainColor), HEX));
-    page.replace("{{NIGHTCOLOR}}", "#" + String(RGB565toRGB888(settings.NightColor), HEX));
-    page.replace("{{FIRMWAREVERSION}}", "V:" + String(Version));
-    page.replace("{{CURRENTHOUR}}", String(Clock_Hour) + ":" + String(Clock_Min));
+    page.replace("{{NIGHTCLOCKSTART}}", String(settings.nightModeStartHour < 10 ? "0" + String(settings.nightModeStartHour) : String(settings.nightModeStartHour)) + ":" + String(settings.nightModeStartMin < 10 ? "0" + String(settings.nightModeStartMin) : String(settings.nightModeStartMin)));
+    page.replace("{{NIGHTCLOCKEND}}", String(settings.nightModeEndHour < 10 ? "0" + String(settings.nightModeEndHour) : String(settings.nightModeEndHour)) + ":" + String(settings.nightModeEndMin < 10 ? "0" + String(settings.nightModeEndMin) : String(settings.nightModeEndMin)));
+    page.replace("{{MAIN_COLOR}}", "#" + String(RGB565toRGB888(settings.mainColor), HEX));
+    page.replace("{{NIGHT_COLOR}}", "#" + String(RGB565toRGB888(settings.nightColor), HEX));
+    page.replace("{{FIRMWAREVERSION}}", "V:" + String(firmwareVersion));
+    page.replace("{{CURRENTHOUR}}", String(clockHour) + ":" + String(clockMin));
     page.replace("{{ezTime}}", country.dateTime());
     page.replace("{{UPTIME}}", String(days) + "d " + String(hours) + "h " + String(minutes) + "m " + String(seconds) + "s");
     page.replace("{{RTCCHIP}}", String(now.day()) + "/" + String(now.month()) + "/" + String(now.year()) + "|" + String(now.hour()) + ":" + String(now.minute()) + ":" + String(now.second()));
@@ -1572,7 +1522,7 @@ void Start_Web_Servers() {
     page.replace("{{Y_SENSOR1DATA}}", formattedTempDataSensor1);
 
     page.replace("{{terminalOutput}}", formattedTerminalOutput);
-    page.replace("{{PLACE}}", settings.CIDADE);
+    page.replace("{{PLACE}}", settings.city);
     if (randomColor) {
       page.replace("{{RANDOMCOLORCHECKBOX}}", "checked ");
     } else {
@@ -1589,42 +1539,42 @@ void Start_Web_Servers() {
   server.on("/SaveNewSettings", HTTP_POST, handleSaveNewSettings);
 
   server.on("/JsonSensorData", HTTP_GET, []() {
-    if (TempDataTimeHour.size() == 0) {
+    if (tempDataHour.size() == 0) {
       sensors.requestTemperatures();
-      TempDataTimeHour.push(country.hour());
-      TempDataTimeMin.push(country.minute());
-      TempDataSensor1.push(sensors.getTempCByIndex(0));
+      tempDataHour.push(country.hour());
+      tempDataMin.push(country.minute());
+      tempDataSensor.push(sensors.getTempCByIndex(0));
     }
-    server.send(200, "application/json", "{\"Temperature\": " + String(TempDataSensor1.last()) + "}");
+    server.send(200, "application/json", "{\"Temperature\": " + String(tempDataSensor.last()) + "}");
   });
 
   server.on("/Sensor", HTTP_GET, []() {
-    if (TempDataTimeHour.size() == 0) {
+    if (tempDataHour.size() == 0) {
       DateTime now = rtc.now();
       sensors.requestTemperatures();
-      TempDataTimeHour.push(country.hour());
-      TempDataTimeMin.push(country.minute());
-      TempDataSensor1.push(sensors.getTempCByIndex(0));
+      tempDataHour.push(country.hour());
+      tempDataMin.push(country.minute());
+      tempDataSensor.push(sensors.getTempCByIndex(0));
     }
 
 
     String formattedTimeString, formattedTempDataSensor1, formattedTempDataSensor2;
 
 
-    for (size_t i = 0; i < TempDataTimeHour.size(); ++i) {
+    for (size_t i = 0; i < tempDataHour.size(); ++i) {
       formattedTimeString +=
-        (TempDataTimeHour[i] < 10 ? "0" + String(TempDataTimeHour[i]) : String(TempDataTimeHour[i])) + ":" + (TempDataTimeMin[i] < 10 ? "0" + String(TempDataTimeMin[i]) : String(TempDataTimeMin[i]));
+        (tempDataHour[i] < 10 ? "0" + String(tempDataHour[i]) : String(tempDataHour[i])) + ":" + (tempDataMin[i] < 10 ? "0" + String(tempDataMin[i]) : String(tempDataMin[i]));
 
-      formattedTempDataSensor1 += String(TempDataSensor1[i]);
+      formattedTempDataSensor1 += String(tempDataSensor[i]);
 
-      if (i != TempDataTimeHour.size() - 1) {
+      if (i != tempDataHour.size() - 1) {
         formattedTimeString += ",";
         formattedTempDataSensor1 += ",";
       }
     }
 
     String page = String(TempPage);
-    page.replace("{{Custom-text}}", "V:" + String(Version) + "<br>João Fernandes");
+    page.replace("{{Custom-text}}", "V:" + String(firmwareVersion) + "<br>João Fernandes");
     page.replace("{{X_AXIS}}", formattedTimeString);
     page.replace("{{Y_SENSOR1DATA}}", formattedTempDataSensor1);
     server.send(200, "text/html", page);
@@ -1635,10 +1585,10 @@ void Start_Web_Servers() {
     //float pageMaxBrightness = 10.0 - ((float)settings.maxbrightness * 10.0 / 255.0);
     //pageMaxBrightness = int(ceil(settings.maxbrightness));
     float pageMaxBrightness = (float)settings.maxbrightness * 0.39;  // 100/255 value approximated
-    page.replace("{{Custom-text}}", "V:" + String(Version) + "<br>João Fernandes");
-    page.replace("{{maxbrightness}}", String(pageMaxBrightness));
-    page.replace("{{MAINCOLOR}}", "#" + String(RGB565toRGB888(settings.MainColor), HEX));
-    page.replace("{{NIGHTCOLOR}}", "#" + String(RGB565toRGB888(settings.NightColor), HEX));
+    page.replace("{{CUSTOM_TEXT}}", "V:" + String(firmwareVersion) + "<br>João Fernandes");
+    page.replace("{{MAX_BRIGHTNESS}}", String(pageMaxBrightness));
+    page.replace("{{MAIN_COLOR}}", "#" + String(RGB565toRGB888(settings.mainColor), HEX));
+    page.replace("{{NIGHT_COLOR}}", "#" + String(RGB565toRGB888(settings.nightColor), HEX));
     server.send(200, "text/html", page);
   });
 
@@ -1650,14 +1600,14 @@ void Start_Web_Servers() {
     server.send_P(200, "text/javascript", iro_js);
   });
 
-  server.on("/SaveColor", HTTP_POST, Server_SaveColor);
-  server.on("/TestColor", HTTP_POST, TestColor);
+  server.on("/SaveColor", HTTP_POST, serverSaveColor);
+  server.on("/testColor", HTTP_POST, testColor);
 
   server.on("/TempRequest", HTTP_POST, []() {
     sensors.requestTemperatures();
-    TempDataTimeHour.push(country.hour());
-    TempDataTimeMin.push(country.minute());
-    TempDataSensor1.push(sensors.getTempCByIndex(0));
+    tempDataHour.push(country.hour());
+    tempDataMin.push(country.minute());
+    tempDataSensor.push(sensors.getTempCByIndex(0));
 
     server.send(200, "text/plain", "temperatures requested sucessfully");
   });
@@ -1666,22 +1616,22 @@ void Start_Web_Servers() {
 
   server.begin();
 }
-//if (last_weather_update_hour > 24 || last_weather_update_hour != Clock_Hour) {
+//if (last_weather_update_hour > 24 || last_weather_update_hour != clockHour) {
 void getWeather() {
   bool weather = true;
 
   HTTPClient http;  // Object of class HTTPClient
   http.useHTTP10(true);
 
-  String url = "http://api.weatherapi.com/v1/forecast.json?key=" + APIKEY + "&q=" + settings.CIDADE + "&days=1&aqi=no&alerts=no&lang=" + settings.Language;
-  if (Clock_Hour == 23) {
+  String url = "http://api.weatherapi.com/v1/forecast.json?key=" + APIKEY + "&q=" + settings.city + "&days=1&aqi=no&alerts=no&lang=" + settings.language;
+  if (clockHour == 23) {
     url += "&hour=23";
   } else {
-    url += "&hour=" + String(Clock_Hour + 1);
+    url += "&hour=" + String(clockHour + 1);
   }
-  if (last_weather_update_hour > 24 || last_weather_update_hour != Clock_Hour) {  //only update if the last update was more than 1 hour ago or it was never run
-    http.begin(wifiClient, url);                                                  // Begin HTTP request
-    int httpCode = http.GET();                                                    // Get the response code
+  if (last_weather_update_hour > 24 || last_weather_update_hour != clockHour) {  //only update if the last update was more than 1 hour ago or it was never run
+    http.begin(wifiClient, url);                                                 // Begin HTTP request
+    int httpCode = http.GET();                                                   // Get the response code
 
     if (httpCode <= 0) {
       weather = false;
@@ -1709,17 +1659,17 @@ void getWeather() {
       DeserializationError error = deserializeJson(doc, bufferedFile, DeserializationOption::Filter(filter));
 
       if (error) {
-        TerminalOutput("deserializeJson() failed: ");
-        TerminalOutput(error.f_str());
+        terminalOutput("deserializeJson() failed: ");
+        terminalOutput(error.f_str());
         return;
       }
 
       // Access the values in the filtered document
       JsonObject forecast_forecastday = doc["forecast"]["forecastday"][0]["hour"][0];
-      const char* forecast_time = forecast_forecastday["time"];                    // e.g. "2021-09-24 23:00"
-      float forecast_temp = forecast_forecastday["temp_c"];                        // e.g. 16.1
-      int forecast_hum = forecast_forecastday["humidity"];                         // e.g. 80
-      const char* forecast_condition = forecast_forecastday["condition"]["text"];  // e.g. "Clear"
+      forecast_time = forecast_forecastday["time"];                    // e.g. "2021-09-24 23:00"
+      forecast_temp = forecast_forecastday["temp_c"];                  // e.g. 16.1
+      forecast_hum = forecast_forecastday["humidity"];                 // e.g. 80
+      forecast_condition = forecast_forecastday["condition"]["text"];  // e.g. "Clear"
 
       // Prepare the weather string
       short int tmp_t = round(forecast_temp);
@@ -1745,11 +1695,11 @@ void getWeather() {
       }
 
       // Print the results
-      TerminalOutput(forecast_time);
-      TerminalOutput(weather_str);
-      TerminalOutput("Sunrise:" + String(sunrise_h) + ":" + String(sunrise_m));
+      terminalOutput(forecast_time);
+      terminalOutput(weather_str);
+      terminalOutput("Sunrise:" + String(sunrise_h) + ":" + String(sunrise_m));
     }
-
+    last_weather_update_hour = country.hour();
     http.end();  // Close the connection
   }
 }
@@ -1760,20 +1710,20 @@ void handleSaveNewSettings() {
     settings.maxbrightness = (uint8_t)server.arg("maxbrightness").toInt();
   }
 
-  if (server.hasArg("maincolor")) {
-    settings.MainColor = (uint16_t)strtoul(server.arg("maincolor").c_str(), nullptr, 0);
+  if (server.hasArg("mainColor")) {
+    settings.mainColor = (uint16_t)strtoul(server.arg("mainColor").c_str(), nullptr, 0);
   }
 
-  if (server.hasArg("nightcolor")) {
-    settings.NightColor = (uint16_t)strtoul(server.arg("nightcolor").c_str(), nullptr, 0);
+  if (server.hasArg("nightColor")) {
+    settings.nightColor = (uint16_t)strtoul(server.arg("nightColor").c_str(), nullptr, 0);
   }
 
   if (server.hasArg("place")) {
-    strlcpy(settings.CIDADE, server.arg("place").c_str(), sizeof(settings.CIDADE));
+    strlcpy(settings.city, server.arg("place").c_str(), sizeof(settings.city));
   }
 
   if (server.hasArg("language")) {
-    strlcpy(settings.Language, server.arg("language").c_str(), sizeof(settings.Language));
+    strlcpy(settings.language, server.arg("language").c_str(), sizeof(settings.language));
   }
 
   settings.weather = server.hasArg("weather");
@@ -1782,48 +1732,48 @@ void handleSaveNewSettings() {
   if (server.hasArg("start")) {
     String start = server.arg("start");
     if (start.length() >= 5) {
-      settings.NightModeStartHour = start.substring(0, 2).toInt();
-      settings.NightModeStartMin = start.substring(3, 5).toInt();
+      settings.nightModeStartHour = start.substring(0, 2).toInt();
+      settings.nightModeStartMin = start.substring(3, 5).toInt();
     }
   }
 
   if (server.hasArg("end")) {
     String end = server.arg("end");
     if (end.length() >= 5) {
-      settings.NightModeEndHour = end.substring(0, 2).toInt();
-      settings.NightModeEndMin = end.substring(3, 5).toInt();
+      settings.nightModeEndHour = end.substring(0, 2).toInt();
+      settings.nightModeEndMin = end.substring(3, 5).toInt();
     }
   }
 
   saveSettings(settings);
 
-  TerminalOutput("Settings updated from Web UI and saved to NVS");
+  terminalOutput("Settings updated from Web UI and saved to NVS");
   server.send(200, "text/plain", "OK");
 }
 
 
-void TerminalOutput(String text) {
-  text = String(Clock_Hour < 10 ? "0" : "") + Clock_Hour + ":" + (Clock_Min < 10 ? "0" : "") + Clock_Min + " : " + text;
+void terminalOutput(String text) {
+  text = String(clockHour < 10 ? "0" : "") + clockHour + ":" + (clockMin < 10 ? "0" : "") + clockMin + " : " + text;
   Serial.println(text);
-  TerminalBuffer.push(text);
+  terminalBuffer.push(text);
 }
 
 void setDefaultSettings(AppSettings& s) {
   s.maxbrightness = 175;
 
-  s.MainColor = 0xad75;
-  s.NightColor = 0x8c71;
+  s.mainColor = 0xad75;
+  s.nightColor = 0x8c71;
 
   s.randomColor = true;
   s.weather = true;
 
-  strlcpy(s.CIDADE, "Aveiro,Portugal", sizeof(s.CIDADE));
-  strlcpy(s.Language, "en", sizeof(s.Language));
+  strlcpy(s.city, "Aveiro,Portugal", sizeof(s.city));
+  strlcpy(s.language, "en", sizeof(s.language));
 
-  s.NightModeStartHour = 23;
-  s.NightModeStartMin = 0;
-  s.NightModeEndHour = 10;
-  s.NightModeEndMin = 30;
+  s.nightModeStartHour = 23;
+  s.nightModeStartMin = 0;
+  s.nightModeEndHour = 10;
+  s.nightModeEndMin = 30;
 }
 
 void saveSettings(const AppSettings& s) {
@@ -1832,19 +1782,19 @@ void saveSettings(const AppSettings& s) {
   preferences.putBool("hasInit", true);
 
   preferences.putUChar("maxbright", s.maxbrightness);
-  preferences.putUShort("mainColor", s.MainColor);
-  preferences.putUShort("nightColor", s.NightColor);
+  preferences.putUShort("mainColor", s.mainColor);
+  preferences.putUShort("nightColor", s.nightColor);
 
   preferences.putBool("randColor", s.randomColor);
   preferences.putBool("weather", s.weather);
 
-  preferences.putString("cidade", s.CIDADE);
-  preferences.putString("lang", s.Language);
+  preferences.putString("city", s.city);
+  preferences.putString("lang", s.language);
 
-  preferences.putUChar("nm_st_h", s.NightModeStartHour);
-  preferences.putUChar("nm_st_m", s.NightModeStartMin);
-  preferences.putUChar("nm_en_h", s.NightModeEndHour);
-  preferences.putUChar("nm_en_m", s.NightModeEndMin);
+  preferences.putUChar("nm_st_h", s.nightModeStartHour);
+  preferences.putUChar("nm_st_m", s.nightModeStartMin);
+  preferences.putUChar("nm_en_h", s.nightModeEndHour);
+  preferences.putUChar("nm_en_m", s.nightModeEndMin);
 
   preferences.end();
 }
@@ -1862,22 +1812,22 @@ void loadSettings(AppSettings& s) {
   }
 
   s.maxbrightness = preferences.getUChar("maxbright", 175);
-  s.MainColor = preferences.getUShort("mainColor", 0xad75);
-  s.NightColor = preferences.getUShort("nightColor", 0x8c71);
+  s.mainColor = preferences.getUShort("mainColor", 0xad75);
+  s.nightColor = preferences.getUShort("nightColor", 0x8c71);
 
   s.randomColor = preferences.getBool("randColor", true);
   s.weather = preferences.getBool("weather", true);
 
-  String cidadeTmp = preferences.getString("cidade", "Aveiro,Portugal");
+  String cidadeTmp = preferences.getString("city", "Aveiro,Portugal");
   String langTmp = preferences.getString("lang", "en");
 
-  strlcpy(s.CIDADE, cidadeTmp.c_str(), sizeof(s.CIDADE));
-  strlcpy(s.Language, langTmp.c_str(), sizeof(s.Language));
+  strlcpy(s.city, cidadeTmp.c_str(), sizeof(s.city));
+  strlcpy(s.language, langTmp.c_str(), sizeof(s.language));
 
-  s.NightModeStartHour = preferences.getUChar("nm_st_h", 23);
-  s.NightModeStartMin = preferences.getUChar("nm_st_m", 0);
-  s.NightModeEndHour = preferences.getUChar("nm_en_h", 10);
-  s.NightModeEndMin = preferences.getUChar("nm_en_m", 30);
+  s.nightModeStartHour = preferences.getUChar("nm_st_h", 23);
+  s.nightModeStartMin = preferences.getUChar("nm_st_m", 0);
+  s.nightModeEndHour = preferences.getUChar("nm_en_h", 10);
+  s.nightModeEndMin = preferences.getUChar("nm_en_m", 30);
 
   preferences.end();
 }

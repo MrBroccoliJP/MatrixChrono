@@ -134,7 +134,7 @@
             <div id="custom-text-field">{{Custom-text}}</div>
         </div>
         <script>
-            var maxbrightness = "{{maxbrightness}}";
+            var maxbrightness = "{{MAX_BRIGHTNESS}}";
             var maxbrightness = "40";
             var colorPicker = new iro.ColorPicker("#iro-container", {
                 wheelLightness: false,
@@ -186,7 +186,7 @@
                 console.log("type=" + colorType + "&color=" + rgbColor);
                 xhr.send("type=" + colorType + "&color=" + rgbColor);
             }
-            setCurrentColor("{{MAINCOLOR}}", "{{NIGHTCOLOR}}");
+            setCurrentColor("{{MAIN_COLOR}}", "{{NIGHT_COLOR}}");
         </script>
     </body>
 </html>
