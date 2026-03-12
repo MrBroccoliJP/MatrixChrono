@@ -1382,6 +1382,7 @@ void testColor() {
         matrix.print(outText);
         matrix.show();
       }
+      modeInitialized = false;
       loop();
     } else if (server.arg("type") == "night") {
       screenClockHour = 88;
@@ -1407,6 +1408,7 @@ void testColor() {
         matrix.print(outText);
         matrix.show();
       }
+      modeInitialized = false;
       loop();
     }
     server.send(200, "text/plain", "Color set successfully");
