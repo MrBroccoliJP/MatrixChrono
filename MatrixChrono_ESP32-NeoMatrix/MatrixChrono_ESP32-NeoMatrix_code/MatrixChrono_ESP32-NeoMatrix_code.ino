@@ -42,7 +42,7 @@ Timezone country;
 
 char* C_POSIX = PT_POSIX;
 
-const char* firmwareVersion = "5.52";
+const char* firmwareVersion = "5.53";
 
 
 Adafruit_NeoMatrix matrix = Adafruit_NeoMatrix(8, 8, 4, 1, PIN,
@@ -78,10 +78,8 @@ struct AppSettings {
 };
 
 AppSettings settings;
-bool randomColor = 1;
+
 uint8_t red, green, blue;  //USED FOR THE RGB565TORGB FUNCTION
-//AsyncWebServer server(80);
-bool wifiportal;  //used to see if the wifi is connected or not.
 
 uint8_t r = 0;             //main red color
 uint8_t g = 0;             //main green color
@@ -104,24 +102,18 @@ enum class ClockMode { NORMAL,
 ClockMode currentMode;
 bool modeInitialized = false;
 
-//max brightness 175
-uint8_t buttonPin = 26;
+const uint8_t buttonPin = 26;
 
 uint16_t currentColor = 0;
 
 unsigned long tmp_millis = millis();  //used to store millis information
 unsigned long wifi_millis = 0;
-unsigned long check_wifi_millis = 0;
-unsigned long int ShowTemp;
-uint8_t last_tempreading;
+unsigned long int showTempMillis;
+uint8_t lastTempReading ;
 
 //wEATHER VARIABLES
 uint8_t last_weather_update_hour = 25;
 
-const char* forecast_time;
-float forecast_temp = 0.0;
-int forecast_hum = 0;
-const char* forecast_condition = "null";
 String weather_str;
 short int sunrise_h = 8;
 short int sunrise_m = 00;  //set to 08:00 in case it fails to get weather and does not update it.
@@ -560,7 +552,7 @@ void refreshNormalClockSlideEffect() {
   clockHour = country.hour();
   clockMin = country.minute();
 
-  if (randomColor) {  //THIS PART IS ONLY RUN IF RANDOM COLOR IS ENABLED
+  if (settings.randomColor) {  //THIS PART IS ONLY RUN IF RANDOM COLOR IS ENABLED
     if ((screenClockHour != clockHour && screenClockHour > 0) || (targetR + targetG + targetB) <= 10) {
       if ((interpolatedR + interpolatedG + interpolatedB) == 0) {
 
@@ -1007,7 +999,7 @@ void minimalistClock() {
       } else {
         cursor = 20;
       }
-      if (last_tempreading != clockMin) {
+      if (lastTempReading  != clockMin) {
         // this part is only supposed to run once every 15 minutes
         sensors.requestTemperatures();  //request temperatures twice because the sensor seems to retain info from the last reading in the first request
         sensors.requestTemperatures();
@@ -1015,21 +1007,21 @@ void minimalistClock() {
         tempDataMin.push(country.minute());               //push minutes
         tempDataSensor.push(sensors.getTempCByIndex(0));  //push temperature
 
-        last_tempreading = clockMin;                                     //update the last reading time
+        lastTempReading  = clockMin;                                     //update the last reading time
         matrix.setCursor(cursor, 4);                                     //set the cursor for the matrix print.
         matrix.print(String(int(round(tempDataSensor.last()))) + "ºC");  //print on the screen the temperature
-        ShowTemp = millis();                                             //the start time of the temperature display
-        if (ShowTemp == 0) {
-          ShowTemp = 1;  //in the unlikely event (1milisecond is not gonna matter)
+        showTempMillis = millis();                                             //the start time of the temperature display
+        if (showTempMillis == 0) {
+          showTempMillis = 1;  //in the unlikely event (1milisecond is not gonna matter)
         }
       }
-      if (millis() - ShowTemp > 5000 && ShowTemp != 0) {  //after 5 seconds it should clear the matrix temperature data.
+      if (millis() - showTempMillis > 5000 && showTempMillis != 0) {  //after 5 seconds it should clear the matrix temperature data.
         matrix.setCursor(cursor, 4);
         matrix.setTextColor(0);
         matrix.print("####");
         matrix.setTextColor(currentColor);
         //Serial.println("CLEARING SCREEN");
-        ShowTemp = 0;
+        showTempMillis = 0;
       }
     }
 
@@ -1333,7 +1325,7 @@ void serverSaveColor() {
     g = server_g;
     b = server_b;
     maxChannelValue = max(max(r, g), b);  // Use max function directly for max RGB
-    if (randomColor) {
+    if (settings.randomColor) {
       targetR = targetB = targetG = 0;
     }
 
@@ -1523,7 +1515,7 @@ void startWebServers() {
 
     page.replace("{{terminalOutput}}", formattedTerminalOutput);
     page.replace("{{PLACE}}", settings.city);
-    if (randomColor) {
+    if (settings.randomColor) {
       page.replace("{{RANDOMCOLORCHECKBOX}}", "checked ");
     } else {
       page.replace("{{RANDOMCOLORCHECKBOX}}", " ");
@@ -1574,7 +1566,7 @@ void startWebServers() {
     }
 
     String page = String(TempPage);
-    page.replace("{{Custom-text}}", "V:" + String(firmwareVersion) + "<br>João Fernandes");
+    page.replace("{{CUSTOM_TEXT}}", "V:" + String(firmwareVersion) + "<br>João Fernandes");
     page.replace("{{X_AXIS}}", formattedTimeString);
     page.replace("{{Y_SENSOR1DATA}}", formattedTempDataSensor1);
     server.send(200, "text/html", page);
@@ -1582,8 +1574,6 @@ void startWebServers() {
 
   server.on("/Color", HTTP_GET, []() {
     String page = String(ColorPickerPage);
-    //float pageMaxBrightness = 10.0 - ((float)settings.maxbrightness * 10.0 / 255.0);
-    //pageMaxBrightness = int(ceil(settings.maxbrightness));
     float pageMaxBrightness = (float)settings.maxbrightness * 0.39;  // 100/255 value approximated
     page.replace("{{CUSTOM_TEXT}}", "V:" + String(firmwareVersion) + "<br>João Fernandes");
     page.replace("{{MAX_BRIGHTNESS}}", String(pageMaxBrightness));
@@ -1666,10 +1656,10 @@ void getWeather() {
 
       // Access the values in the filtered document
       JsonObject forecast_forecastday = doc["forecast"]["forecastday"][0]["hour"][0];
-      forecast_time = forecast_forecastday["time"];                    // e.g. "2021-09-24 23:00"
-      forecast_temp = forecast_forecastday["temp_c"];                  // e.g. 16.1
-      forecast_hum = forecast_forecastday["humidity"];                 // e.g. 80
-      forecast_condition = forecast_forecastday["condition"]["text"];  // e.g. "Clear"
+      const char* forecast_time = forecast_forecastday["time"];                    // e.g. "2021-09-24 23:00"
+      float forecast_temp = forecast_forecastday["temp_c"];                  // e.g. 16.1
+      int forecast_hum = forecast_forecastday["humidity"];                 // e.g. 80
+      const char* forecast_condition = forecast_forecastday["condition"]["text"];  // e.g. "Clear"
 
       // Prepare the weather string
       short int tmp_t = round(forecast_temp);
