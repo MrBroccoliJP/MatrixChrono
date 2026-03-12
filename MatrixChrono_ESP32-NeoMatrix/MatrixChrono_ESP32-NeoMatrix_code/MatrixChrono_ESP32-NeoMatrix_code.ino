@@ -34,13 +34,16 @@ WiFiClient wifiClient;
 #include <OneWire.h>
 #include <ezTime.h>
 #include <DallasTemperature.h>
-
+#include <Preferences.h>
+Preferences preferences;
 RTC_DS3231 rtc;
+Timezone country;
+
 #define PT_POSIX "WET0WEST,M3.5.0/1,M10.5.0/2"
 
 char* C_POSIX = PT_POSIX;
 
-const char* Version = "5.4";
+const char* Version = "5.42";
 
 
 Adafruit_NeoMatrix matrix = Adafruit_NeoMatrix(8, 8, 4, 1, PIN,
@@ -48,11 +51,34 @@ Adafruit_NeoMatrix matrix = Adafruit_NeoMatrix(8, 8, 4, 1, PIN,
                                                NEO_GRB + NEO_KHZ800);
 #include "icons.h"  //this needs to be after the matrix declaration since it uses matrix stuff
 
-Timezone country;
+
 const int oneWireBus = 32;
 OneWire oneWire(oneWireBus);
 DallasTemperature sensors(&oneWire);
 WebServer server(80);
+
+// --------------------------------------------------
+// Persistent settings
+// --------------------------------------------------
+struct AppSettings {
+  uint8_t maxbrightness;
+
+  uint16_t MainColor;   // RGB565
+  uint16_t NightColor;  // RGB565
+
+  bool randomColor;
+  bool weather;
+
+  char CIDADE[32];
+  char Language[16];
+
+  uint8_t NightModeStartHour;
+  uint8_t NightModeStartMin;
+  uint8_t NightModeEndHour;
+  uint8_t NightModeEndMin;
+};
+
+AppSettings settings;
 
 //AsyncWebServer server(80);
 bool wifiportal;  //used to see if the wifi is connected or not.
@@ -75,9 +101,7 @@ float b_dec = 0;                                          //used for calculation
 
 //max brightness 175
 uint8_t buttonPin = 26;
-uint8_t maxbrightness = 175;  //this is dependent on the psu
-uint16_t MainColor = 0xad75;
-uint16_t NightColor = 0x8c71;
+
 uint16_t CurrentColor = 0;
 uint8_t x = 0;
 
@@ -89,16 +113,12 @@ uint8_t last_tempreading;
 
 //wEATHER VARIABLES
 uint8_t last_weather_update_hour = 25;
-bool weather = true;
-String CIDADE = "Aveiro";
-char CIDADE_c[10];
+
 const char* forecast_time;
 float forecast_temp = 0.0;
 int forecast_hum = 0;
 const char* forecast_condition = "null";
 String weather_str;
-// char weather_c[64];
-String Language = "pt";
 short int sunrise_h = 8;
 short int sunrise_m = 00;  //set to 08:00 in case it fails to get weather and does not update it.
 
@@ -127,10 +147,6 @@ int8_t Screen_Clock_Min = -1;
 uint8_t Clock_Sec;  //only used for certain functions.
 short int LastRTCSyncTime = -1;
 
-uint8_t NightModeStartHour = 23;
-uint8_t NightModeStartMin = 00;
-uint8_t NightModeEndHour = 11;
-uint8_t NightModeEndMin = 00;
 int8_t ClockSwitchFlag = -1;
 bool sunrise_loop = 0;
 
@@ -144,13 +160,15 @@ WiFiManager wm;
 
 void setup() {
   sensors.begin();
+
   pinMode(buttonPin, INPUT_PULLUP);
   Serial.begin(115200);
-
+  loadSettings(settings);
+  TerminalOutput("Settings loaded from nvs");
   //initialization
   matrix.begin();
   matrix.setTextWrap(false);
-  matrix.setBrightness(maxbrightness);
+  matrix.setBrightness(settings.maxbrightness);
   matrix.fillScreen(0);
   matrix.setFont(&Normal);
   matrix.setTextSize(1);
@@ -173,7 +191,7 @@ void setup() {
   wifiportal = wm.autoConnect("NEOCLOCK_AP");
 
   //delay for wifi connection?
-  matrix.setBrightness(maxbrightness);
+  matrix.setBrightness(settings.maxbrightness);
   // out_text = "WiFi Connecting";
   // matrix.setCursor(0, 8);
   // matrix.print(out_text);
@@ -242,7 +260,7 @@ void setup() {
   //PANIC THIS PUTS THE DEVICE INTO A LOOP SO THAT A CODE CAN BE UPLOADED
   int reading = digitalRead(buttonPin);
   if (reading == LOW) {
-    matrix.setBrightness(maxbrightness);
+    matrix.setBrightness(settings.maxbrightness);
     ArduinoOTA.handle();
     matrix.fillScreen(0);
     matrix.setCursor(0, 7);
@@ -287,7 +305,7 @@ void setup() {
   tmp_millis = millis();
 
   //display IP
-  matrix.setBrightness(maxbrightness);
+  matrix.setBrightness(settings.maxbrightness);
   scrollText(WiFi.localIP().toString(), 50);
 
   //Serial.println("Setup1" + wifi_connected);
@@ -326,20 +344,20 @@ void setup() {
   //READ EEPROM STORAGE
   EEPROM.begin(4);
 
-  EEPROM.get(0, MainColor);
-  EEPROM.get(2, NightColor);
-  if (!isValidColor(MainColor)) {
-    MainColor = 0xad75;
+  EEPROM.get(0, settings.MainColor);
+  EEPROM.get(2, settings.NightColor);
+  if (!isValidColor(settings.MainColor)) {
+    settings.MainColor = 0xad75;
   }
-  if (!isValidColor(NightColor)) {
-    NightColor = 0x8c71;
+  if (!isValidColor(settings.NightColor)) {
+    settings.NightColor = 0x8c71;
   }
 
 
   // r = random(0, 255);
   // g = random(0, 255);
   // b = random(0, 255);
-  RGB565TORGB(MainColor, r, g, b);
+  RGB565TORGB(settings.MainColor, r, g, b);
   r_tmp = r;
   g_tmp = g;
   b_tmp = b;
@@ -409,8 +427,8 @@ void loop() {
 
   // Get the current time (you can cache it to avoid repeated calls)
   int currentTime = country.hour() * 100 + country.minute();
-  int nightEndTime = NightModeEndHour * 100 + NightModeEndMin;
-  int nightStartTime = NightModeStartHour * 100 + NightModeStartMin;
+  int nightEndTime = settings.NightModeEndHour * 100 + settings.NightModeEndMin;
+  int nightStartTime = settings.NightModeStartHour * 100 + settings.NightModeStartMin;
 
   // Determine if we are in night mode or normal mode
 
@@ -430,12 +448,12 @@ void loop() {
   if (isNight) {
     //NIGHT MODE
     if (ClockSwitchFlag != 0) {
-        matrix.fillScreen(0);
+      matrix.fillScreen(0);
       // Night mode initialization
-      CurrentColor = NightColor;
+      CurrentColor = settings.NightColor;
       matrix.setFont(&Mini_Font);
       matrix.setTextColor(CurrentColor);  //never change the values of MainColor or NightColor (PROTECTED VALUES)
-      RGB565TORGB(NightColor, r, g, b);
+      RGB565TORGB(settings.NightColor, r, g, b);
       r_dec = double(r) / 25;
       g_dec = double(g) / 23;
       b_dec = double(b) / 24;
@@ -450,11 +468,11 @@ void loop() {
     if (ClockSwitchFlag != 1) {
       // Normal mode initialization
       sunrise_loop = 0;
-      CurrentColor = MainColor;  //the MainColor property is always the starting value of the normal clock mode, even when the randomColor flag is set
+      CurrentColor = settings.MainColor;  //the MainColor property is always the starting value of the normal clock mode, even when the randomColor flag is set
       matrix.setFont(&square_big_font);
       matrix.setTextColor(CurrentColor);  //never change the values of MainColor or NightColor (PROTECTED VALUES)
 
-      RGB565TORGB(MainColor, r, g, b);  //this sets the r,g,b values based on the MainColor property
+      RGB565TORGB(settings.MainColor, r, g, b);  //this sets the r,g,b values based on the MainColor property
       r_dec = double(r) / 25;
       g_dec = double(g) / 23;
       b_dec = double(b) / 24;
@@ -473,9 +491,9 @@ void loop() {
 void Normal_Clock() {
   short int currentBrightness = matrix.getBrightness();
   unsigned long int MillisKeep;
-  while (currentBrightness != maxbrightness) {
-    if (currentBrightness < maxbrightness) {
-      for (int i = currentBrightness; i < maxbrightness + 1;) {
+  while (currentBrightness != settings.maxbrightness) {
+    if (currentBrightness < settings.maxbrightness) {
+      for (int i = currentBrightness; i < settings.maxbrightness + 1;) {
         matrix.setBrightness(i);
         refresh_normal_clock();
         fade_tick(16, 2, 6);
@@ -484,8 +502,8 @@ void Normal_Clock() {
         i++;
         delay(5);
       }
-    } else if (currentBrightness > maxbrightness) {
-      for (int i = currentBrightness; i > maxbrightness - 1;) {
+    } else if (currentBrightness > settings.maxbrightness) {
+      for (int i = currentBrightness; i > settings.maxbrightness - 1;) {
         matrix.setBrightness(i);
         refresh_normal_clock();
         fade_tick(16, 2, 6);
@@ -515,12 +533,10 @@ void Normal_Clock() {
         //matrix.show();
       }  //delay 5 seconds
 
-
-
       getWeather();
       fadeOut(100);
       matrix.fillScreen(0);
-      matrix.setBrightness(maxbrightness);
+      matrix.setBrightness(settings.maxbrightness);
       matrix.setFont(&Normal);
       scrollText(weather_str, 50);
       matrix.setFont(&square_big_font);
@@ -534,7 +550,7 @@ void Normal_Clock() {
       //delay(5000);  //delay 5 seconds
       fadeOut(100);
       matrix.fillScreen(0);
-      matrix.setBrightness(maxbrightness);
+      matrix.setBrightness(settings.maxbrightness);
       matrix.setCursor(0, 7);
       matrix.print(String(int(TempDataSensor1.last())) + "$C");  //$ = º --> used $ to save space on the font
       matrix.show();
@@ -544,7 +560,7 @@ void Normal_Clock() {
       delay(5000);   //display temperature for 5 seconds
       fadeOut(100);  //fadeout temperature
       matrix.fillScreen(0);
-      matrix.setBrightness(maxbrightness);
+      matrix.setBrightness(settings.maxbrightness);
       refresh_normal_clock_slideEffect();
     }
   }
@@ -1017,7 +1033,7 @@ void randomNextColor(uint8_t maxRGBValue, int minutes_to_target) {
 
 void minimalist_Clock() {
 
-  matrix.setBrightness(maxbrightness);
+  matrix.setBrightness(settings.maxbrightness);
   //matrix.setTextColor(matrix.Color(r, g, b));
   //bool temperatureDisplayed = false
   short int tickXLoc;
@@ -1072,16 +1088,20 @@ void minimalist_Clock() {
 
     Clock_Hour = country.hour();
     Clock_Min = country.minute();
+    int nowMinutes = Clock_Hour * 60 + Clock_Min;
+    int sunriseMinutes = (sunrise_h * 60 + sunrise_m) - 15; //we want the loop to start 15 min before the sunrise hour
+    int sunriseEndMinutes = sunriseMinutes + 60;
     //if the time is between the sunset window.
-    if ((((Clock_Hour * 100) + Clock_Min) >= ((sunrise_h * 100) + sunrise_m)) && ((Clock_Hour * 100 + Clock_Min) < (((sunrise_h + 1) * 100) + sunrise_m))) {
+    if (nowMinutes >= sunriseMinutes && nowMinutes < sunriseEndMinutes) {
 
       if (sunrise_loop == 0) {  //first run
         // Convert colors
-        RGB565TORGB(MainColor, next_r, next_g, next_b);
-        RGB565TORGB(NightColor, r, g, b);
+        RGB565TORGB(settings.MainColor, next_r, next_g, next_b);
+        RGB565TORGB(settings.NightColor, r, g, b);
 
         //calculate minutes to reach target
-        int dec_target_time = ((sunrise_h + 1) * 100 - (Clock_Hour * 100 + Clock_Min));
+        int dec_target_time = sunriseEndMinutes - nowMinutes;
+        if (dec_target_time < 1) dec_target_time = 1;
         // Calculate step sizes for each color component
         dec_next_r = (float)abs(r - next_r) / dec_target_time;
         dec_next_g = (float)abs(g - next_g) / dec_target_time;
@@ -1113,12 +1133,20 @@ void minimalist_Clock() {
       CurrentColor = matrix.Color(r, g, b);
       TerminalOutput("r:" + String(r) + "g:" + String(g) + "b:" + String(b) + " | Target: " + String(next_r) + "," + String(next_g) + "," + String(next_b));
       matrix.setTextColor(CurrentColor);
-    } else if ((((Clock_Hour * 100) + Clock_Min) > (((sunrise_h + 1) * 100) + sunrise_m)) && sunrise_loop == 0) {
-      sunrise_loop = 1;
-      RGB565TORGB(MainColor, r, g, b);
-      CurrentColor = matrix.Color(r, g, b);
-      matrix.setTextColor(CurrentColor);
+    } else {
+      if (sunrise_loop == 0) {
+        //SUNRISE LOOP HAS NOT RUN
+        RGB565TORGB(settings.NightColor, r, g, b);
+        CurrentColor = matrix.Color(r, g, b);
+        matrix.setTextColor(CurrentColor);
+      } else {
+        sunrise_loop = 1;
+        RGB565TORGB(settings.MainColor, r, g, b);
+        CurrentColor = matrix.Color(r, g, b);
+        matrix.setTextColor(CurrentColor);
+      }
     }
+
 
     matrix.fillScreen(0);
     //draw clock
@@ -1209,7 +1237,7 @@ void handleButton() {
         getWeather();
         fadeOut(100);
         matrix.fillScreen(0);
-        matrix.setBrightness(maxbrightness);
+        matrix.setBrightness(settings.maxbrightness);
         matrix.setFont(&Normal);
         scrollText(weather_str, 50);
         matrix.setFont(&square_big_font);
@@ -1259,7 +1287,7 @@ void fadeOut(int duration) {  //duration in miliseconds
 
 void fadeIn(int speed, int targetBrightness) {
   int brightness = matrix.getBrightness();
-  (targetBrightness > maxbrightness) ? targetBrightness : maxbrightness;
+  (targetBrightness > settings.maxbrightness) ? targetBrightness : settings.maxbrightness;
   for (int i = brightness; i < targetBrightness; i++) {
     brightness = matrix.getBrightness();
     matrix.setBrightness(i);
@@ -1362,15 +1390,15 @@ void Server_SaveColor() {
     r_dec = double(r) / 25;
     g_dec = double(g) / 25;
     b_dec = double(b) / 25;
-    MainColor = matrix.Color(r, g, b);
+    settings.MainColor = matrix.Color(r, g, b);
 
     server_r = (int)strtol(&Night_color[1], NULL, 16) >> 16 & 0xFF;
     server_g = (int)strtol(&Night_color[1], NULL, 16) >> 8 & 0xFF;
     server_b = (int)strtol(&Night_color[1], NULL, 16) & 0xFF;
 
-    NightColor = matrix.Color(server_r, server_g, server_b);
-    EEPROM.put(0, MainColor);
-    EEPROM.put(2, NightColor);
+    settings.NightColor = matrix.Color(server_r, server_g, server_b);
+    EEPROM.put(0, settings.MainColor);
+    EEPROM.put(2, settings.NightColor);
     EEPROM.commit();
     //matrix.setBrightness(server_brightness);
     //setBrightness(server_brightness);
@@ -1513,7 +1541,7 @@ void Start_Web_Servers() {
 
     for (size_t i = 0; i < TempDataTimeHour.size(); ++i) {
       // Concatenate hour and minute with a colon
-      formattedTimeString +=  (TempDataTimeHour[i] < 10 ? "0" + String(TempDataTimeHour[i]) : String(TempDataTimeHour[i])) + ":" + (TempDataTimeMin[i] < 10 ? "0" + String(TempDataTimeMin[i]) : String(TempDataTimeMin[i]));
+      formattedTimeString += (TempDataTimeHour[i] < 10 ? "0" + String(TempDataTimeHour[i]) : String(TempDataTimeHour[i])) + ":" + (TempDataTimeMin[i] < 10 ? "0" + String(TempDataTimeMin[i]) : String(TempDataTimeMin[i]));
       formattedTempDataSensor1 += String(TempDataSensor1[i]);
       // Add comma if not the last element
       if (i != TempDataTimeHour.size() - 1) {
@@ -1527,12 +1555,12 @@ void Start_Web_Servers() {
     String page = String(MAIN_page);
     page.replace("{{WiFi}}", WiFi.SSID());
     page.replace("{{IP}}", WiFi.localIP().toString());
-    page.replace("{{MAXBRIGHTNESS}}", String(maxbrightness));
+    page.replace("{{MAXBRIGHTNESS}}", String(settings.maxbrightness));
     page.replace("{{POSIX}}", String(C_POSIX));
-    page.replace("{{NIGHTCLOCKSTART}}", String(NightModeStartHour < 10 ? "0" + String(NightModeStartHour) : String(NightModeStartHour)) + ":" + String(NightModeStartMin < 10 ? "0" + String(NightModeStartMin) : String(NightModeStartMin)));
-    page.replace("{{NIGHTCLOCKEND}}", String(NightModeEndHour < 10 ? "0" + String(NightModeEndHour) : String(NightModeEndHour)) + ":" + String(NightModeEndMin < 10 ? "0" + String(NightModeEndMin) : String(NightModeEndMin)));
-    page.replace("{{MAINCOLOR}}", "#" + String(RGB565toRGB888(MainColor), HEX));
-    page.replace("{{NIGHTCOLOR}}", "#" + String(RGB565toRGB888(NightColor), HEX));
+    page.replace("{{NIGHTCLOCKSTART}}", String(settings.NightModeStartHour < 10 ? "0" + String(settings.NightModeStartHour) : String(settings.NightModeStartHour)) + ":" + String(settings.NightModeStartMin < 10 ? "0" + String(settings.NightModeStartMin) : String(settings.NightModeStartMin)));
+    page.replace("{{NIGHTCLOCKEND}}", String(settings.NightModeEndHour < 10 ? "0" + String(settings.NightModeEndHour) : String(settings.NightModeEndHour)) + ":" + String(settings.NightModeEndMin < 10 ? "0" + String(settings.NightModeEndMin) : String(settings.NightModeEndMin)));
+    page.replace("{{MAINCOLOR}}", "#" + String(RGB565toRGB888(settings.MainColor), HEX));
+    page.replace("{{NIGHTCOLOR}}", "#" + String(RGB565toRGB888(settings.NightColor), HEX));
     page.replace("{{FIRMWAREVERSION}}", "V:" + String(Version));
     page.replace("{{CURRENTHOUR}}", String(Clock_Hour) + ":" + String(Clock_Min));
     page.replace("{{ezTime}}", country.dateTime());
@@ -1544,13 +1572,13 @@ void Start_Web_Servers() {
     page.replace("{{Y_SENSOR1DATA}}", formattedTempDataSensor1);
 
     page.replace("{{terminalOutput}}", formattedTerminalOutput);
-    page.replace("{{PLACE}}", CIDADE);
+    page.replace("{{PLACE}}", settings.CIDADE);
     if (randomColor) {
       page.replace("{{RANDOMCOLORCHECKBOX}}", "checked ");
     } else {
       page.replace("{{RANDOMCOLORCHECKBOX}}", " ");
     }
-    if (weather) {
+    if (settings.weather) {
       page.replace("{{WEATHERCHECKBOX}}", "checked ");
     } else {
       page.replace("{{WEATHERCHECKBOX}}", " ");
@@ -1604,12 +1632,13 @@ void Start_Web_Servers() {
 
   server.on("/Color", HTTP_GET, []() {
     String page = String(ColorPickerPage);
-    float pageMaxBrightness = 10.0 - ((float)maxbrightness * 10.0 / 255.0);
-    pageMaxBrightness = int(ceil(pageMaxBrightness));
+    //float pageMaxBrightness = 10.0 - ((float)settings.maxbrightness * 10.0 / 255.0);
+    //pageMaxBrightness = int(ceil(settings.maxbrightness));
+    float pageMaxBrightness = (float)settings.maxbrightness * 0.39;  // 100/255 value approximated
     page.replace("{{Custom-text}}", "V:" + String(Version) + "<br>João Fernandes");
     page.replace("{{maxbrightness}}", String(pageMaxBrightness));
-    page.replace("{{MAINCOLOR}}", "#" + String(RGB565toRGB888(MainColor), HEX));
-    page.replace("{{NIGHTCOLOR}}", "#" + String(RGB565toRGB888(NightColor), HEX));
+    page.replace("{{MAINCOLOR}}", "#" + String(RGB565toRGB888(settings.MainColor), HEX));
+    page.replace("{{NIGHTCOLOR}}", "#" + String(RGB565toRGB888(settings.NightColor), HEX));
     server.send(200, "text/html", page);
   });
 
@@ -1644,7 +1673,7 @@ void getWeather() {
   HTTPClient http;  // Object of class HTTPClient
   http.useHTTP10(true);
 
-  String url = "http://api.weatherapi.com/v1/forecast.json?key=" + APIKEY + "&q=" + CIDADE + "&days=1&aqi=no&alerts=no&lang=" + Language;
+  String url = "http://api.weatherapi.com/v1/forecast.json?key=" + APIKEY + "&q=" + settings.CIDADE + "&days=1&aqi=no&alerts=no&lang=" + settings.Language;
   if (Clock_Hour == 23) {
     url += "&hour=23";
   } else {
@@ -1727,40 +1756,48 @@ void getWeather() {
 
 
 void handleSaveNewSettings() {
+  if (server.hasArg("maxbrightness")) {
+    settings.maxbrightness = (uint8_t)server.arg("maxbrightness").toInt();
+  }
 
-  if (server.hasArg("posix")) {
-    C_POSIX = strdup(server.arg("posix").c_str());
-    country.setPosix(C_POSIX);
+  if (server.hasArg("maincolor")) {
+    settings.MainColor = (uint16_t)strtoul(server.arg("maincolor").c_str(), nullptr, 0);
+  }
+
+  if (server.hasArg("nightcolor")) {
+    settings.NightColor = (uint16_t)strtoul(server.arg("nightcolor").c_str(), nullptr, 0);
   }
 
   if (server.hasArg("place")) {
-    CIDADE = server.arg("place");
+    strlcpy(settings.CIDADE, server.arg("place").c_str(), sizeof(settings.CIDADE));
   }
 
-  if (server.hasArg("weather")) {
-    weather = server.arg("weather") == "true";
+  if (server.hasArg("language")) {
+    strlcpy(settings.Language, server.arg("language").c_str(), sizeof(settings.Language));
   }
 
-  if (server.hasArg("randomcolor")) {
-    randomColor = server.arg("randomcolor") == "true";
-  }
+  settings.weather = server.hasArg("weather");
+  settings.randomColor = server.hasArg("randomcolor");
 
   if (server.hasArg("start")) {
     String start = server.arg("start");
-
-    NightModeStartHour = start.substring(0,2).toInt();
-    NightModeStartMin  = start.substring(3,5).toInt();
+    if (start.length() >= 5) {
+      settings.NightModeStartHour = start.substring(0, 2).toInt();
+      settings.NightModeStartMin = start.substring(3, 5).toInt();
+    }
   }
 
   if (server.hasArg("end")) {
     String end = server.arg("end");
-
-    NightModeEndHour = end.substring(0,2).toInt();
-    NightModeEndMin  = end.substring(3,5).toInt();
+    if (end.length() >= 5) {
+      settings.NightModeEndHour = end.substring(0, 2).toInt();
+      settings.NightModeEndMin = end.substring(3, 5).toInt();
+    }
   }
 
-  TerminalOutput("Settings updated from Web UI");
+  saveSettings(settings);
 
+  TerminalOutput("Settings updated from Web UI and saved to NVS");
   server.send(200, "text/plain", "OK");
 }
 
@@ -1769,4 +1806,78 @@ void TerminalOutput(String text) {
   text = String(Clock_Hour < 10 ? "0" : "") + Clock_Hour + ":" + (Clock_Min < 10 ? "0" : "") + Clock_Min + " : " + text;
   Serial.println(text);
   TerminalBuffer.push(text);
+}
+
+void setDefaultSettings(AppSettings& s) {
+  s.maxbrightness = 175;
+
+  s.MainColor = 0xad75;
+  s.NightColor = 0x8c71;
+
+  s.randomColor = true;
+  s.weather = true;
+
+  strlcpy(s.CIDADE, "Aveiro,Portugal", sizeof(s.CIDADE));
+  strlcpy(s.Language, "en", sizeof(s.Language));
+
+  s.NightModeStartHour = 23;
+  s.NightModeStartMin = 0;
+  s.NightModeEndHour = 10;
+  s.NightModeEndMin = 30;
+}
+
+void saveSettings(const AppSettings& s) {
+  preferences.begin("matrixcfg", false);
+
+  preferences.putBool("hasInit", true);
+
+  preferences.putUChar("maxbright", s.maxbrightness);
+  preferences.putUShort("mainColor", s.MainColor);
+  preferences.putUShort("nightColor", s.NightColor);
+
+  preferences.putBool("randColor", s.randomColor);
+  preferences.putBool("weather", s.weather);
+
+  preferences.putString("cidade", s.CIDADE);
+  preferences.putString("lang", s.Language);
+
+  preferences.putUChar("nm_st_h", s.NightModeStartHour);
+  preferences.putUChar("nm_st_m", s.NightModeStartMin);
+  preferences.putUChar("nm_en_h", s.NightModeEndHour);
+  preferences.putUChar("nm_en_m", s.NightModeEndMin);
+
+  preferences.end();
+}
+
+void loadSettings(AppSettings& s) {
+  preferences.begin("matrixcfg", true);
+
+  bool hasInit = preferences.getBool("hasInit", false);
+
+  if (!hasInit) {
+    preferences.end();
+    setDefaultSettings(s);
+    saveSettings(s);
+    return;
+  }
+
+  s.maxbrightness = preferences.getUChar("maxbright", 175);
+  s.MainColor = preferences.getUShort("mainColor", 0xad75);
+  s.NightColor = preferences.getUShort("nightColor", 0x8c71);
+
+  s.randomColor = preferences.getBool("randColor", true);
+  s.weather = preferences.getBool("weather", true);
+
+  String cidadeTmp = preferences.getString("cidade", "Aveiro,Portugal");
+  String langTmp = preferences.getString("lang", "en");
+
+  strlcpy(s.CIDADE, cidadeTmp.c_str(), sizeof(s.CIDADE));
+  strlcpy(s.Language, langTmp.c_str(), sizeof(s.Language));
+
+  s.NightModeStartHour = preferences.getUChar("nm_st_h", 23);
+  s.NightModeStartMin = preferences.getUChar("nm_st_m", 0);
+  s.NightModeEndHour = preferences.getUChar("nm_en_h", 10);
+  s.NightModeEndMin = preferences.getUChar("nm_en_m", 30);
+
+  preferences.end();
 }
