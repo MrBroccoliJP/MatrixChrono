@@ -98,9 +98,15 @@ I'll provide the code and general instructions, but I won't be offering in-depth
    🚨 **Failure to follow these steps may cause erratic behavior**—such as incorrect LED colors, flickering, or other malfunctions.
    
 2. **Library/Boards Manager Versions:**
-Make sure you set your libraries to the following versions. (Libraries without version-specific requirements are omitted.)
-- [DallasTemperature](https://github.com/milesburton/Arduino-Temperature-Control-Library): V3.9.0 [TODO: Update sketch to comply with the library changes]
- - ESP32 by Espressif: V2.0.17 [Versions >V3 have issues with Adafruit NeoPixel and NeoMatrix libraries]
+Make sure the ESP32 core and Adafruit NeoPixel versions are compatible. `Adafruit_NeoMatrix` uses `Adafruit_NeoPixel` to drive the LEDs, so upgrading only the ESP32 board package can cause watchdog-reset loops on a 256-pixel matrix.
+
+- **Recommended project baseline:** ESP32 by Espressif **2.0.17**.
+- **Classic ESP32 DevKit display compatibility with core 3.x:** install Adafruit NeoPixel **1.12.5 or newer** before upgrading the ESP32 board package. NeoPixel 1.12.4 moved the ESP32 RMT buffer from the task stack to the heap, and 1.12.5 includes a follow-up RMT cleanup fix. Current display-library versions are Adafruit NeoPixel **1.15.5** and Adafruit NeoMatrix **1.3.3**. ESP32-S3/C-series boards use different RMT implementations and need separate validation.
+- [DallasTemperature](https://github.com/milesburton/Arduino-Temperature-Control-Library): **3.9.0** remains the known project baseline.
+
+The 32x8/core-3 watchdog failure and its fix are documented in the [NeoMatrix issue](https://github.com/adafruit/Adafruit_NeoMatrix/issues/27), [NeoPixel RMT fix](https://github.com/adafruit/Adafruit_NeoPixel/pull/394), and [NeoPixel 1.12.5 release](https://github.com/adafruit/Adafruit_NeoPixel/releases/tag/1.12.5). The `#include <Adafruit_NeoMatrix.h>` and `#include <Adafruit_NeoPixel.h>` lines are valid with both supported combinations; the failure is caused by the old NeoPixel ESP32 RMT implementation, not by the headers.
+
+The complete firmware also depends on WiFiManager. WiFiManager 2.0.17 has an [open configuration-portal reset report with ESP32 core 3.1+](https://github.com/tzapu/WiFiManager/issues/1797), so keep the 2.0.17 core baseline unless the full clock (including first-boot provisioning) has been tested on the newer core.
      
 
 
@@ -108,7 +114,7 @@ Make sure you set your libraries to the following versions. (Libraries without v
 
    - Toggle the Neopixel power switch OFF before programming.
    - Connect the ESP32 to your computer via USB and verify it appears as a serial device.
-   - Create a `Secrets.h` file and add your API key for WeatherAPI:  
+   - Create a `secrets.h` file and add your API key for WeatherAPI:
      `String APIKEY = "YOUR_API_KEY";`
 
 2. **Power Up**

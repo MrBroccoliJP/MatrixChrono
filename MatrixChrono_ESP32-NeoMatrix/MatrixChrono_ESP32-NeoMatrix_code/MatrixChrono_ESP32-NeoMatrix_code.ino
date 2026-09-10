@@ -15,7 +15,7 @@ WiFiClient wifiClient;
 #include <ArduinoOTA.h>
 #include <Adafruit_GFX.h>
 #include <Adafruit_NeoMatrix.h>
-#include <Adafruit_NeoPixel.h>
+#include <Adafruit_NeoPixel.h>  // Use 1.12.5+ with ESP32 core 3.x and this 256-pixel matrix
 #include <math.h>
 #include "MiniFont.h"
 #include "Normal.h"
@@ -34,6 +34,7 @@ WiFiClient wifiClient;
 #include <ezTime.h>
 #include <DallasTemperature.h>
 #include <Preferences.h>
+#include <esp_system.h>
 Preferences preferences;
 RTC_DS3231 rtc;
 Timezone country;
@@ -42,7 +43,7 @@ Timezone country;
 
 char* C_POSIX = PT_POSIX;
 
-const char* firmwareVersion = "5.53";
+const char* firmwareVersion = "5.60";
 
 
 Adafruit_NeoMatrix matrix = Adafruit_NeoMatrix(8, 8, 4, 1, PIN,
@@ -111,6 +112,10 @@ unsigned long wifi_millis = 0;
 unsigned long int showTempMillis;
 uint8_t lastTempReading ;
 
+const unsigned long tickPeriodMillis = 1000UL;
+const unsigned long tickHalfPeriodMillis = tickPeriodMillis / 2;
+const unsigned long wifiReconnectIntervalMillis = 120000UL;
+
 //wEATHER VARIABLES
 uint8_t last_weather_update_hour = 25;
 
@@ -150,6 +155,7 @@ void setup() {
 
   pinMode(buttonPin, INPUT_PULLUP);
   Serial.begin(115200);
+  Serial.printf("ESP32 reset reason: %d\n", (int)esp_reset_reason());
   loadSettings(settings);
   terminalOutput("Settings loaded from nvs");
   //initialization
@@ -203,6 +209,7 @@ void setup() {
     wifiConnected = 1;
   } else {
     wifiConnected = 0;
+    wifi_millis = millis();
 
     //Serial.println("Failed to connect to WiFi using saved credentials");
     terminalOutput("Failed to connect to WiFi using saved credentials");
@@ -265,6 +272,7 @@ void setup() {
         g = random(0, 255);
         b = random(0, 255);
         while (rt < r || gt < g || bt < b) {
+          ArduinoOTA.handle();
           if (rt < r) {
             rt = rt + 5;
           }
@@ -276,6 +284,7 @@ void setup() {
           }
           matrix.setPixelColor(led_n, rt, gt, bt);
           matrix.show();
+          delay(1);
         }
 
         rt = 0;
@@ -288,8 +297,6 @@ void setup() {
       led_n = 0;
     }
   }
-
-  tmp_millis = millis();
 
   //display IP
   matrix.setBrightness(settings.maxbrightness);
@@ -314,7 +321,7 @@ void setup() {
       yield();
     }
     rtc.adjust(DateTime(country.year(), country.month(), country.day(), country.hour(), country.minute(), country.second()));
-    LastRTCSyncTime = country.hour() * 1000 + country.minute();
+    LastRTCSyncTime = country.hour() * 100 + country.minute();
 
   } else {
     DateTime now = rtc.now();
@@ -323,6 +330,8 @@ void setup() {
     terminalOutput("time set from rtc clock since wifi not connected");
   }
 
+  // Anchor the tick phase to the beginning of the current wall-clock second.
+  tmp_millis = millis() - country.ms();
 
   startWebServers();
   sensors.requestTemperatures();
@@ -395,42 +404,39 @@ void loop() {
 }
 
 void handleWifi() {
-  // Not connected — attempt reconnect every 2 minutes
-  if (WiFi.status() != WL_CONNECTED && (wifi_millis == 0 || millis() - wifi_millis > 120000)) {
-    wifiConnected = false;
-    server.close();
-    matrix.drawPixel(31, 0, 0xf800);  // red pixel = no wifi
-    terminalOutput("WiFi not connected. Attempting to reconnect...");
-    wm.setConfigPortalTimeout(120);
-    wm.autoConnect("NEOCLOCK_AP");
-    wifi_millis = millis();
-    return;
-  }
+  const bool isConnected = WiFi.status() == WL_CONNECTED;
 
-  // Just (re)connected — verify web server is reachable, restart if not
-  if (WiFi.status() == WL_CONNECTED && !wifiConnected) {
-    matrix.drawPixel(31, 0, 0x0000);  // clear red pixel
-    if (!wifiClient.connect(WiFi.localIP(), 80) && millis() - wifi_millis > 60000) {
-      server.close();
-      startWebServers();
-      terminalOutput("Web server restarted after reconnection");
-      wifi_millis = millis();
-    } else {
-      wifiConnected = true;
-    }
-    return;
-  }
-
-  // Connected and running — handle clients, watchdog check server health
-  if (WiFi.status() == WL_CONNECTED && wifiConnected) {
-    server.handleClient();
-    if (!wifiClient.connect(WiFi.localIP(), 80) && millis() - wifi_millis > 60000) {
+  if (!isConnected) {
+    if (wifiConnected) {
       wifiConnected = false;
+      wifi_millis = millis();
       server.close();
-      startWebServers();
-      terminalOutput("Web server restarted - was unresponsive");
+      matrix.drawPixel(31, 0, 0xf800);  // red pixel = no wifi
+      terminalOutput("WiFi connection lost");
+      WiFi.reconnect();                 // try the saved network immediately
     }
+
+    // WiFiManager remains non-blocking and is serviced by wm.process().
+    // Retry occasionally and reopen the non-blocking configuration portal,
+    // without creating a TCP connection back to our own web server.
+    if (wifi_millis == 0 || millis() - wifi_millis >= wifiReconnectIntervalMillis) {
+      terminalOutput("WiFi not connected. Attempting to reconnect...");
+      wm.autoConnect("NEOCLOCK_AP");
+      wifi_millis = millis();
+    }
+    return;
   }
+
+  if (!wifiConnected) {
+    wifiConnected = true;
+    wifi_millis = millis();
+    matrix.drawPixel(31, 0, 0x0000);  // clear red pixel
+    wm.stopConfigPortal();            // release WiFiManager's port 80 first
+    server.begin();                   // routes were registered during setup
+    terminalOutput("WiFi reconnected; web server restarted");
+  }
+
+  server.handleClient();
 }
 
 void normalClock() {
@@ -475,7 +481,10 @@ void normalClock() {
       MillisKeep = millis();
       while (millis() - MillisKeep < 5000) {
         fadeTick(16, 2, 6);
-        //matrix.show();
+        wm.process();
+        ArduinoOTA.handle();
+        server.handleClient();
+        delay(1);
       }  //delay 5 seconds
 
       getWeather();
@@ -893,23 +902,38 @@ void refreshNormalClockSlideEffect() {
   screenClockMin = clockMin;
 }
 
+unsigned long tickPhaseMillis() {
+  const unsigned long now = millis();
+  unsigned long phase = now - tmp_millis;
+
+  if (phase >= tickPeriodMillis * 2) {
+    // A long display/network operation may skip several seconds. Re-anchor
+    // using ezTime's position within the current second. Subtracting keeps
+    // tmp_millis in the past and avoids unsigned-underflow lockups.
+    unsigned long wallClockPhase = country.ms();
+    if (wallClockPhase >= tickPeriodMillis) {
+      wallClockPhase = 0;
+    }
+    tmp_millis = now - wallClockPhase;
+    phase = wallClockPhase;
+  } else if (phase >= tickPeriodMillis) {
+    tmp_millis += tickPeriodMillis;
+    phase -= tickPeriodMillis;
+  }
+
+  return phase;
+}
+
 void tick(short int x_loc, short int y_loc_led1, short int y_loc_led2) {
-  short int correction;
-  if ((millis() - tmp_millis) > 500 && (millis() - tmp_millis) <= 1000) {
+  const unsigned long phase = tickPhaseMillis();
+  if (phase >= tickHalfPeriodMillis) {
     fadeCurrentR = r;
     fadeCurrentG = g;
     fadeCurrentB = b;
-  } else if ((millis() - tmp_millis) < 500 && (millis() - tmp_millis) <= 1000) {
+  } else {
     fadeCurrentR = 0;
     fadeCurrentG = 0;
     fadeCurrentB = 0;
-
-  } else if (((millis() - tmp_millis) > 1000) && ((millis() - tmp_millis) < 1999)) {
-    correction = 1000 - (millis() - tmp_millis);
-    tmp_millis = millis() - correction;
-  } else if ((millis() - tmp_millis) >= 2000) {
-    tmp_millis = millis() + country.ms();  //correct it with ms from eztime
-                                           // tmp_millis = millis();
   }
 
   uint16_t color = matrix.Color(int(fadeCurrentR), int(fadeCurrentG), int(fadeCurrentB));
@@ -919,10 +943,8 @@ void tick(short int x_loc, short int y_loc_led1, short int y_loc_led2) {
 }
 
 void fadeTick(short int x_loc, short int y_loc_led1, short int y_loc_led2) {
-
-  short int correction;
-
-  if ((millis() - tmp_millis) > 500 && (millis() - tmp_millis) <= 1000) {
+  const unsigned long phase = tickPhaseMillis();
+  if (phase >= tickHalfPeriodMillis) {
     if (fadeCurrentR != r) {
       fadeStepR= double(r) / 23;
       fadeCurrentR = (fadeCurrentR + fadeStepR<= r) ? (fadeCurrentR + fadeStepR) : r;
@@ -936,7 +958,7 @@ void fadeTick(short int x_loc, short int y_loc_led1, short int y_loc_led2) {
       fadeCurrentB = (fadeCurrentB + fadeStepB <= b) ? (fadeCurrentB + fadeStepB) : b;
     }
     //fade in tick until 500miliseconds (1/2 second)
-  } else if ((millis() - tmp_millis) < 500 && (millis() - tmp_millis) <= 1000) {
+  } else {
     if (fadeCurrentR != 0) {
       fadeStepR= double(r) / 25;
       fadeCurrentR = (fadeCurrentR - fadeStepR>= 0) ? (fadeCurrentR - fadeStepR) : 0;
@@ -950,12 +972,6 @@ void fadeTick(short int x_loc, short int y_loc_led1, short int y_loc_led2) {
       fadeCurrentB = (fadeCurrentB - fadeStepB >= 0) ? (fadeCurrentB - fadeStepB) : 0;
     }
     //fade out tick until 1000miliseconds (full second)
-  } else if (((millis() - tmp_millis) > 1000) && ((millis() - tmp_millis) < 1999)) {
-    //in this case tmp_millis might be misaligned with the seconds, so this tries to correct it.
-    correction = 1000 - (millis() - tmp_millis);
-    tmp_millis = millis() - correction;
-  } else if ((millis() - tmp_millis) >= 2000) {
-    tmp_millis = millis() + country.ms();  //correct it with ms from eztime
   }
 
   uint16_t color = matrix.Color(int(fadeCurrentR), int(fadeCurrentG), int(fadeCurrentB));
@@ -1126,23 +1142,8 @@ void minimalistClock() {
 }
 
 void minimalisticTick(short int x_loc, short int y_loc_led1, short int y_loc_led2) {
-  uint16_t color = matrix.Color(int(r), int(g), int(b));
-  short int correction;
-  if ((millis() - tmp_millis) > 500 && (millis() - tmp_millis) <= 1000) {
-    color = matrix.Color(int(r), int(g), int(b));
-  } else if ((millis() - tmp_millis) < 500 && (millis() - tmp_millis) <= 1000) {
-    color = 0;
-  } else if (((millis() - tmp_millis) > 1000) && ((millis() - tmp_millis) < 1999)) {
-    //in this case tmp_millis might be misaligned with the seconds, so this tries to correct it.
-    color = 0;
-    correction = 1000 - (millis() - tmp_millis);
-    tmp_millis = millis() - correction;
-  } else if ((millis() - tmp_millis) >= 2000) {
-    color = 0;
-    //has drifted too far
-    // Clock_Sec = country.second();
-    tmp_millis = millis() + country.ms();  //correct it with ms from eztime
-  }
+  const unsigned long phase = tickPhaseMillis();
+  const uint16_t color = phase >= tickHalfPeriodMillis ? matrix.Color(r, g, b) : 0;
   matrix.drawPixel(x_loc, y_loc_led1, color);
   matrix.drawPixel(x_loc, y_loc_led2, color);
   matrix.show();
@@ -1187,7 +1188,9 @@ void handleButton() {
         scrollText(weather_str, 50);
         matrix.setFont(&square_big_font);
         fadeOut(100);
-        loop();
+        screenClockHour = -1;
+        screenClockMin = -1;
+        modeInitialized = false;
       }
     }
   }
@@ -1210,6 +1213,7 @@ void syncSecondsWithRTC() {
 
     unsigned long unixTime = rtcTime.unixtime();  // Get Unix timestamp from RTC
     country.setTime(unixTime);                    // Sync ezTime to RTC time
+    tmp_millis = millis() - country.ms();         // Keep the display tick aligned too
     LastRTCSyncTime = country.hour() * 100 + country.minute();
     terminalOutput("time synced with rtc");
   }
@@ -1217,13 +1221,34 @@ void syncSecondsWithRTC() {
 
 
 void fadeOut(int duration) {  //duration in miliseconds
-  int brightness = matrix.getBrightness();
-  int step = round((float)duration / brightness);
-  for (int i = brightness; i > 0; i -= step) {
-    matrix.setBrightness(i);  //used the normal setBrightness directly because the value should never be above max brightness anyway
+  const int startingBrightness = matrix.getBrightness();
+  if (startingBrightness <= 0) {
+    matrix.setBrightness(0);
+    return;
+  }
+
+  if (duration <= 0) {
+    matrix.setBrightness(0);
     matrix.show();
-    //Serial.println(i);
-    //Serial.println(matrix.getBrightness());
+    return;
+  }
+
+  const unsigned long fadeDuration = (unsigned long)duration;
+  const unsigned long fadeStart = millis();
+  int lastBrightness = startingBrightness;
+
+  while (true) {
+    const unsigned long elapsed = millis() - fadeStart;
+    if (elapsed >= fadeDuration) {
+      break;
+    }
+    const int brightness = (int)((startingBrightness * (fadeDuration - elapsed)) / fadeDuration);
+    if (brightness != lastBrightness) {
+      matrix.setBrightness(brightness);
+      matrix.show();
+      lastBrightness = brightness;
+    }
+    delay(1);
   }
   matrix.setBrightness(0);  //set to 0
   matrix.show();
@@ -1270,11 +1295,20 @@ uint8_t utf8Ascii(uint8_t ascii) {
 }
 
 
-void convert(const char* source, char* destination)  // picks every character from char *source,
-{                                                    // converts it and writes it into char* destination
-  int k = 0;
+void convert(const char* source, char* destination, size_t destinationSize)  // picks every character from char *source,
+{                                                                            // converts it and writes it into char* destination
+  if (destinationSize == 0) {
+    return;
+  }
+
+  if (source == nullptr) {
+    destination[0] = 0;
+    return;
+  }
+
+  size_t k = 0;
   char c;
-  for (int i = 0; i < strlen(source); i++) {
+  for (size_t i = 0; source[i] != 0 && k + 1 < destinationSize; i++) {
     c = utf8Ascii(source[i]);
     if (c != 0)
       destination[k++] = c;
@@ -1291,7 +1325,7 @@ void scrollText(String text, int speed) {
 
   // Create a buffer to hold the converted text
   char convertedText[100];           // Adjust size based on your needs
-  convert(textChar, convertedText);  // Convert the text
+  convert(textChar, convertedText, sizeof(convertedText));  // Convert the text safely
 
   // Get text bounds for scrolling calculations
   matrix.getTextBounds(convertedText, 0, 0, &x1, &y1, &w, &h);
@@ -1346,7 +1380,9 @@ void serverSaveColor() {
     fadeOut(200);
 
     server.send(200, "text/plain", "Color set successfully");
-    loop();
+    screenClockHour = -1;
+    screenClockMin = -1;
+    modeInitialized = false;
 
   } else {
     server.send(400, "text/plain", "Missing parameters");
@@ -1367,23 +1403,27 @@ void testColor() {
       int server_g = (int)strtol(&color[1], NULL, 16) >> 8 & 0xFF;
       int server_b = (int)strtol(&color[1], NULL, 16) & 0xFF;
 
-      unsigned long int time_to_reach = millis() + 5000;
-
       uint16_t test_color = matrix.Color(server_r, server_g, server_b);
 
       fadeOut(500);
       matrix.setTextColor(test_color);
-      matrix.setBrightness(175);
-      while (millis() < time_to_reach) {
-        matrix.setFont(&square_big_font);
-        matrix.fillScreen(0);
-        outText = "88:88";
-        matrix.setCursor(4, 7);
-        matrix.print(outText);
-        matrix.show();
+      matrix.setBrightness(settings.maxbrightness);
+      matrix.setFont(&square_big_font);
+      matrix.fillScreen(0);
+      outText = "88:88";
+      matrix.setCursor(4, 7);
+      matrix.print(outText);
+      matrix.show();
+
+      const unsigned long previewStart = millis();
+      while (millis() - previewStart < 5000UL) {
+        wm.process();
+        ArduinoOTA.handle();
+        delay(10);
       }
       modeInitialized = false;
-      loop();
+      screenClockHour = -1;
+      screenClockMin = -1;
     } else if (server.arg("type") == "night") {
       screenClockHour = 88;
       screenClockMin = 88;
@@ -1393,23 +1433,27 @@ void testColor() {
       int server_g = (int)strtol(&color[1], NULL, 16) >> 8 & 0xFF;
       int server_b = (int)strtol(&color[1], NULL, 16) & 0xFF;
 
-      unsigned long int time_to_reach = millis() + 5000;
-
       uint16_t test_color = matrix.Color(server_r, server_g, server_b);
 
       fadeOut(500);
       matrix.setTextColor(test_color);
-      matrix.setBrightness(175);
-      while (millis() < time_to_reach) {
-        matrix.setFont(&Mini_Font);
-        matrix.fillScreen(0);
-        outText = "88:88";
-        matrix.setCursor(0, 7);
-        matrix.print(outText);
-        matrix.show();
+      matrix.setBrightness(settings.maxbrightness);
+      matrix.setFont(&Mini_Font);
+      matrix.fillScreen(0);
+      outText = "88:88";
+      matrix.setCursor(0, 7);
+      matrix.print(outText);
+      matrix.show();
+
+      const unsigned long previewStart = millis();
+      while (millis() - previewStart < 5000UL) {
+        wm.process();
+        ArduinoOTA.handle();
+        delay(10);
       }
       modeInitialized = false;
-      loop();
+      screenClockHour = -1;
+      screenClockMin = -1;
     }
     server.send(200, "text/plain", "Color set successfully");
   } else {
@@ -1606,27 +1650,35 @@ void startWebServers() {
 
 
 
-  server.begin();
+  // WiFiManager may still own port 80 while its configuration portal is
+  // active. The registered routes are started later by handleWifi().
+  if (WiFi.status() == WL_CONNECTED) {
+    server.begin();
+  }
 }
 //if (last_weather_update_hour > 24 || last_weather_update_hour != clockHour) {
 void getWeather() {
-  bool weather = true;
+  if (!settings.weather || WiFi.status() != WL_CONNECTED) {
+    return;
+  }
+
+  const uint8_t weatherHour = country.hour();
 
   HTTPClient http;  // Object of class HTTPClient
   http.useHTTP10(true);
 
   String url = "http://api.weatherapi.com/v1/forecast.json?key=" + APIKEY + "&q=" + settings.city + "&days=1&aqi=no&alerts=no&lang=" + settings.language;
-  if (clockHour == 23) {
+  if (weatherHour == 23) {
     url += "&hour=23";
   } else {
-    url += "&hour=" + String(clockHour + 1);
+    url += "&hour=" + String(weatherHour + 1);
   }
-  if (last_weather_update_hour > 24 || last_weather_update_hour != clockHour) {  //only update if the last update was more than 1 hour ago or it was never run
+  if (last_weather_update_hour > 24 || last_weather_update_hour != weatherHour) {  //only update if the last update was more than 1 hour ago or it was never run
     http.begin(wifiClient, url);                                                 // Begin HTTP request
     int httpCode = http.GET();                                                   // Get the response code
 
     if (httpCode <= 0) {
-      weather = false;
+      terminalOutput("Weather request failed: " + http.errorToString(httpCode));
     } else {
       Stream& input = http.getStream();
 
@@ -1653,6 +1705,7 @@ void getWeather() {
       if (error) {
         terminalOutput("deserializeJson() failed: ");
         terminalOutput(error.f_str());
+        http.end();
         return;
       }
 
@@ -1691,7 +1744,7 @@ void getWeather() {
       terminalOutput(weather_str);
       terminalOutput("Sunrise:" + String(sunrise_h) + ":" + String(sunrise_m));
     }
-    last_weather_update_hour = country.hour();
+    last_weather_update_hour = weatherHour;
     http.end();  // Close the connection
   }
 }
