@@ -8,11 +8,642 @@
  */
 
 const char MAIN_page[] PROGMEM = R"=====(
-<!DOCTYPE html><html lang="pt"><head><meta charset="UTF-8"><meta name="viewport" content="width=device-width, initial-scale=1.0"><link rel="icon" href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🕒</text></svg>"><script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script><title>MainPage</title><style> body { font-family: Arial, sans-serif; margin: 0; padding: 0; background-color: #f3f3f3; } #container { max-width: 800px; margin: 50px auto; background-color: #fff; border-radius: 10px; box-shadow: 0 0 10px rgba(0, 0, 0, 0.1); display: flex; overflow: hidden; } .settings-section { flex: 1; padding: 20px; box-sizing: border-box; } .settings-section.current-settings { border-right: 1px solid #ccc; } label { display: block; margin-bottom: 10px; } input[type="text"], input[type="number"], input[type="time"], select { display: inline-block; vertical-align: middle; width: auto; padding: 3px; margin-top: 0; margin-bottom: 2px; border-radius: 50px; border: 1px solid #ccc; box-sizing: border-box; } button { padding: 8px 20px; background-color: #4CAF50; color: white; border: none; border-radius: 50px; cursor: pointer; } button:hover { background-color: #45a049; } .color-box { display: inline-block; vertical-align: middle; width: 20px; height: 20px; border: 1px solid #ccc; background-color: #000; margin-right: 10px; } .terminal { width: 100%; height: 400px; margin-top: -5px; border-radius: 10px; background-color: black; color: lime; font-family: monospace; } hr { border-top: 2px solid #000; } @media only screen and (max-width: 600px) { #container { flex-direction: column; margin: 20px; } .settings-section { margin-bottom: 20px; border: none; } .settings-section.current-settings { border-right: none; } } </style></head><body><div id="container"><div class="settings-section current-settings"><h2>⚙️ Definições atuais</h2><div><p><strong>Definições base:</strong></p><p><strong>🌍 POSIX:</strong> {{POSIX}}</p><p><strong>🛜 WiFi:</strong> {{WiFi}} | <strong>IP:</strong> {{IP}}</p><p><strong>🔆 Brilho</strong> (máximo): {{MAX_BRIGHTNESS}}</p><hr><p><strong>☀️ Definições de relógio diário:</strong></p><p><strong>🗛 Tipo de letra:</strong> {{FONT}}</p><p><strong>🎨 Cor do relógio:</strong><span class="color-box" style="background-color: {{MAIN_COLOR}};"></span><strong>| 🎲 Cor aleatória:</strong><input type="checkbox" id="current-random-color" {{RANDOMCOLORCHECKBOX}} disabled></p><p><strong>🗺️ Região:</strong> {{PLACE}}</p><p><strong>⛅ Metereologia:</strong><input type="checkbox" id="current-weather" {{WEATHERCHECKBOX}} disabled></p><hr><p><strong>🌙 Definições de relógio noturno:</strong></p><p><strong>🌘 Modo Noturno:</strong><input type="checkbox" id="current-night-clock" {{NIGHTCLOCKCHECKBOX}} disabled></p><p><strong>🕛 Hora de início:</strong><input type="time" id="current-start-hour" value="{{NIGHTCLOCKSTART}}" disabled></p><p><strong>🕘 Hora de fim:</strong><input type="time" id="current-end-hour" value="{{NIGHTCLOCKEND}}" disabled></p><p><strong>🖌️ Cor do relógio no modo noturno:</strong><span class="color-box" style="background-color: {{NIGHT_COLOR}};"></span></p><hr><p><strong>📄 Versão de firmware:</strong> {{FIRMWAREVERSION}}</p><p><strong>🕘 Hora:</strong> (ecrã) {{CURRENTHOUR}}</p><p><strong>📅 Tempo&Data interno:</strong> {{ezTime}}</p><p><strong>🛰️ RTC chip:</strong> {{RTCCHIP}}</p><p><strong>⏲️ Tempo desde o ultimo reset:</strong> {{UPTIME}}</p><p><strong>🌡️ Temperatura (sensor 1):</strong> {{SENSOR1VALUE}}</p><p><strong>🌡️ Temperatura (sensor 2):</strong> {{SENSOR2VALUE}}</p><canvas id="TempChart"></canvas><button type="button" onclick="window.location.href='/Sensor'">🌡️ Leituras</button></div></div><div class="settings-section"><h2>🛠️ Definições Novas</h2><div><br><label for="posix"><strong>🌍 POSIX:</strong><button type="button" onclick="window.open('https://github.com/ropg/ezTime?tab=readme-ov-file#timezones-1', '_blank')"> ? </button><input type="text" id="posix" value="{{POSIX}}"></label><label for="brightness-button"><strong>🔆 Brilho</strong> (máximo): <button type="button" id="brightness-button" onclick="window.location.href='/CalibrateMaxBrightness'"> 🔦 Calibrar </button></label><label for="letter-font"><strong>🗛 Tipo de letra:</strong><select id="letter-font" class="select"><option value="{{FONT}}">{{FONT}}</option></select></label><hr><p><strong>⛅ Metereologia:</strong><input type="checkbox" id="weather-enabled" name="weather-enabled" {{WEATHERCHECKBOX}}></p><label for="WAPIKEY"><strong>🔑 API KEY:</strong><input type="text" id="WAPIKEY" value="{{WEATHERAPIKEY}}"></label><label for="WPLACE"><strong>🗺️ Região:</strong><input type="text" id="WPLACE" value="{{WEATHERPLACE}}"></label><hr><label for="night-clock-enable"><strong>🌘 Modo noturno:</strong><input type="checkbox" id="night-clock-enable" name="night-clock-enable" {{NIGHTCLOCKCHECKBOX}}></label><label for="start-hour"><strong>🕛 Hora de início:</strong><input type="time" id="start-hour" value="{{NIGHTCLOCKSTART}}"></label><label for="end-hour"><strong>🕘 Hora de fim:</strong><input type="time" id="end-hour" value="{{NIGHTCLOCKEND}}"></label><hr><p><strong>🎨 Cor do relógio:</strong><span class="color-box" style="background-color: {{MAIN_COLOR}};"></span><span class="color-box" style="background-color: {{NIGHT_COLOR}};"></span><strong>🎲 Cor aleatória:</strong><input type="checkbox" id="random-color" name="random-color" {{RANDOMCOLORCHECKBOX}}></p><button type="button" onclick="window.location.href='/Color'"> 🖌️ Alterar cores </button><hr></div><button type="button" onclick="SaveNewSettings()">💾 Guardar</button><button type="button" onclick="ESPReset()">🔄️ Reiniciar</button><button type="button" onclick="FactoryReset()">⚠️ Reset</button><hr><h3>🖥️ Terminal Output</h3><textarea id="terminal" rows="10" readonly class="terminal">{{terminalOutput}}</textarea></div></div><script> const rawTime = "{{X_AXIS}}"; const rawSensor1 = "{{Y_SENSOR1DATA}}"; const Time = rawTime.includes("{{") ? [] : rawTime.split(","); const Sensor1 = rawSensor1.includes("{{") ? [] : rawSensor1.split(",").map(Number); new Chart("TempChart", { type: "line", data: { labels: Time, datasets: [{ label: "Sensor 1", fill: false, tension: 0.15, backgroundColor: "rgba(176, 51, 81, 1.0)", borderColor: "rgba(239, 71, 111, 0.8)", data: Sensor1 }] }, options: { responsive: true, plugins: { legend: { display: true } }, scales: { y: { title: { display: true, text: "Temperatura (ºC)" } } } } }); function SaveNewSettings() { var posix = document.getElementById("posix").value; var font = document.getElementById("letter-font").value; var apiKey = document.getElementById("WAPIKEY").value; var place = document.getElementById("WPLACE").value; var weather = document.getElementById("weather-enabled").checked; var nightClock = document.getElementById("night-clock-enable").checked; var randomColor = document.getElementById("random-color").checked; var startHour = document.getElementById("start-hour").value; var endHour = document.getElementById("end-hour").value; var data = "posix=" + encodeURIComponent(posix) + "&font=" + encodeURIComponent(font) + "&weather=" + encodeURIComponent(weather) + "&apikey=" + encodeURIComponent(apiKey) + "&place=" + encodeURIComponent(place) + "&nightclock=" + encodeURIComponent(nightClock) + "&randomcolor=" + encodeURIComponent(randomColor) + "&start=" + encodeURIComponent(startHour) + "&end=" + encodeURIComponent(endHour); var xhr = new XMLHttpRequest(); xhr.open("POST", "/SaveNewSettings", true); xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded"); xhr.send(data); console.log(data); } function ESPReset() { var xhr = new XMLHttpRequest(); xhr.open("POST", "/ESPReset", true); xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded"); xhr.send(); } function FactoryReset() { var xhr = new XMLHttpRequest(); xhr.open("POST", "/FactoryReset", true); xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded"); xhr.send(); } </script></body></html>
+<!DOCTYPE html>
+<html lang="pt">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <link rel="icon"
+        href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🕒</text></svg>">
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js"></script>
+    <title>MainPage</title>
+
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            margin: 0;
+            padding: 0;
+            background-color: #f3f3f3;
+        }
+
+        #container {
+            max-width: 800px;
+            margin: 50px auto;
+            background-color: #fff;
+            border-radius: 10px;
+            box-shadow: 0 0 10px rgba(0, 0, 0, 0.1);
+            display: flex;
+            overflow: hidden;
+        }
+
+        .settings-section {
+            flex: 1;
+            padding: 20px;
+            box-sizing: border-box;
+        }
+
+        .settings-section.current-settings {
+            border-right: 1px solid #ccc;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 10px;
+        }
+
+        input[type="text"],
+        input[type="number"],
+        input[type="time"],
+        select {
+            display: inline-block;
+            vertical-align: middle;
+            width: auto;
+            padding: 3px;
+            margin-top: 0;
+            margin-bottom: 2px;
+            border-radius: 50px;
+            border: 1px solid #ccc;
+            box-sizing: border-box;
+        }
+
+        button {
+            padding: 8px 20px;
+            background-color: #4CAF50;
+            color: white;
+            border: none;
+            border-radius: 50px;
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #45a049;
+        }
+
+        .color-box {
+            display: inline-block;
+            vertical-align: middle;
+            width: 20px;
+            height: 20px;
+            border: 1px solid #ccc;
+            background-color: #000;
+            margin-right: 10px;
+        }
+
+        .terminal {
+            width: 100%;
+            height: 400px;
+            margin-top: -5px;
+            border-radius: 10px;
+            background-color: black;
+            color: lime;
+            font-family: monospace;
+        }
+
+        hr {
+            border-top: 2px solid #000;
+        }
+
+        @media only screen and (max-width: 600px) {
+            #container {
+                flex-direction: column;
+                margin: 20px;
+            }
+
+            .settings-section {
+                margin-bottom: 20px;
+                border: none;
+            }
+
+            .settings-section.current-settings {
+                border-right: none;
+            }
+        }
+    </style>
+</head>
+
+<body>
+    <div id="container">
+        <!-- Current Settings -->
+        <div class="settings-section current-settings">
+            <h2>⚙️ Definições atuais</h2>
+
+            <div>
+                <p><strong>Definições base:</strong></p>
+                <p><strong>🌍 POSIX:</strong> {{POSIX}}</p>
+                <p><strong>🛜 WiFi:</strong> {{WiFi}} | <strong>IP:</strong> {{IP}}</p>
+                <p><strong>🔆 Brilho</strong> (máximo): {{MAX_BRIGHTNESS}}</p>
+
+                <hr>
+
+                <p><strong>☀️ Definições de relógio diário:</strong></p>
+                <p><strong>🗛 Tipo de letra:</strong> {{FONT}}</p>
+                <p>
+                    <strong>🎨 Cor do relógio:</strong>
+                    <span class="color-box" style="background-color: {{MAIN_COLOR}};"></span>
+                    <strong>| 🎲 Cor aleatória:</strong>
+                    <input type="checkbox" id="current-random-color" {{RANDOMCOLORCHECKBOX}} disabled>
+                </p>
+                <p><strong>🗺️ Região:</strong> {{PLACE}}</p>
+                <p>
+                    <strong>⛅ Metereologia:</strong>
+                    <input type="checkbox" id="current-weather" {{WEATHERCHECKBOX}} disabled>
+                </p>
+
+                <hr>
+
+                <p><strong>🌙 Definições de relógio noturno:</strong></p>
+                <p>
+                    <strong>🌘 Modo Noturno:</strong>
+                    <input type="checkbox" id="current-night-clock" {{NIGHTCLOCKCHECKBOX}} disabled>
+                </p>
+                <p>
+                    <strong>🕛 Hora de início:</strong>
+                    <input type="time" id="current-start-hour" value="{{NIGHTCLOCKSTART}}" disabled>
+                </p>
+                <p>
+                    <strong>🕘 Hora de fim:</strong>
+                    <input type="time" id="current-end-hour" value="{{NIGHTCLOCKEND}}" disabled>
+                </p>
+                <p>
+                    <strong>🖌️ Cor do relógio no modo noturno:</strong>
+                    <span class="color-box" style="background-color: {{NIGHT_COLOR}};"></span>
+                </p>
+
+                <hr>
+
+                <p><strong>📄 Versão de firmware:</strong> {{FIRMWAREVERSION}}</p>
+                <p><strong>🕘 Hora:</strong> (ecrã) {{CURRENTHOUR}}</p>
+                <p><strong>📅 Tempo&Data interno:</strong> {{ezTime}}</p>
+                <p><strong>🛰️ RTC chip:</strong> {{RTCCHIP}}</p>
+                <p><strong>⏲️ Tempo desde o ultimo reset:</strong> {{UPTIME}}</p>
+                <p><strong>🌡️ Temperatura (sensor 1):</strong> {{SENSOR1VALUE}}</p>
+                <p><strong>🌡️ Temperatura (sensor 2):</strong> {{SENSOR2VALUE}}</p>
+
+                <canvas id="TempChart"></canvas>
+                <button type="button" onclick="window.location.href='/Sensor'">🌡️ Leituras</button>
+            </div>
+        </div>
+
+        <!-- New Settings -->
+        <div class="settings-section">
+            <h2>🛠️ Definições Novas</h2>
+
+            <div>
+                <br>
+
+                <label for="posix">
+                    <strong>🌍 POSIX:</strong>
+                    <button type="button"
+                        onclick="window.open('https://github.com/ropg/ezTime?tab=readme-ov-file#timezones-1', '_blank')">
+                        ?
+                    </button>
+                    <input type="text" id="posix" maxlength="95" value="{{POSIX}}">
+                </label>
+
+                <label for="brightness-button">
+                    <strong>🔆 Brilho</strong> (máximo):
+                    <input type="number" id="maxbrightness" min="0" max="255" value="{{MAX_BRIGHTNESS}}">
+                </label>
+
+                <label for="letter-font">
+                    <strong>🗛 Tipo de letra:</strong>
+                    <select id="letter-font" class="select" disabled title="Fonte fixa do firmware">
+                        <option value="{{FONT}}">{{FONT}}</option>
+                    </select>
+                </label>
+
+                <hr>
+
+                <p>
+                    <strong>⛅ Metereologia:</strong>
+                    <input type="checkbox" id="weather-enabled" name="weather-enabled" {{WEATHERCHECKBOX}}>
+                </p>
+
+                <label for="language">Idioma: <input type="text" id="language" maxlength="15" value="{{LANGUAGE}}"></label>
+                <label for="WAPIKEY">
+                    <strong>🔑 API KEY:</strong>
+                    <input type="text" id="WAPIKEY" maxlength="127" value="{{WEATHERAPIKEY}}">
+                </label>
+
+                <label for="WPLACE">
+                    <strong>🗺️ Região:</strong>
+                    <input type="text" id="WPLACE" maxlength="31" value="{{WEATHERPLACE}}">
+                </label>
+
+                <hr>
+
+                <label for="night-clock-enable">
+                    <strong>🌘 Modo noturno:</strong>
+                    <input type="checkbox" id="night-clock-enable" name="night-clock-enable" {{NIGHTCLOCKCHECKBOX}}>
+                </label>
+
+                <label for="start-hour">
+                    <strong>🕛 Hora de início:</strong>
+                    <input type="time" id="start-hour" value="{{NIGHTCLOCKSTART}}">
+                </label>
+
+                <label for="end-hour">
+                    <strong>🕘 Hora de fim:</strong>
+                    <input type="time" id="end-hour" value="{{NIGHTCLOCKEND}}">
+                </label>
+
+                <hr>
+
+                <p>
+                    <strong>🎨 Cor do relógio:</strong>
+                    <span class="color-box" style="background-color: {{MAIN_COLOR}};"></span>
+                    <span class="color-box" style="background-color: {{NIGHT_COLOR}};"></span>
+
+                    <strong>🎲 Cor aleatória:</strong>
+                    <input type="checkbox" id="random-color" name="random-color" {{RANDOMCOLORCHECKBOX}}>
+                </p>
+
+                <button type="button" onclick="window.location.href='/Color'">
+                    🖌️ Alterar cores
+                </button>
+
+                <hr>
+            </div>
+
+            <button type="button" onclick="SaveNewSettings()">💾 Guardar</button>
+            <button type="button" onclick="ESPReset()">🔄️ Reiniciar</button>
+            <button type="button" onclick="FactoryReset()">⚠️ Reset</button>
+
+            <hr>
+
+            <h3>🖥️ Terminal Output</h3>
+            <textarea id="terminal" rows="10" readonly class="terminal">{{terminalOutput}}</textarea>
+        </div>
+    </div>
+
+    <script>
+        const rawTime = "{{X_AXIS}}";
+        const rawSensor1 = "{{Y_SENSOR1DATA}}";
+
+        const Time = rawTime.includes("{{") ? [] : rawTime.split(",");
+        const Sensor1 = rawSensor1.includes("{{") ? [] : rawSensor1.split(",").map(Number);
+
+        new Chart("TempChart", {
+            type: "line",
+            data: {
+                labels: Time,
+                datasets: [{
+                    label: "Sensor 1",
+                    fill: false,
+                    tension: 0.15,
+                    backgroundColor: "rgba(176, 51, 81, 1.0)",
+                    borderColor: "rgba(239, 71, 111, 0.8)",
+                    data: Sensor1
+                }]
+            },
+            options: {
+                responsive: true,
+                plugins: {
+                    legend: {
+                        display: true
+                    }
+                },
+                scales: {
+                    y: {
+                        title: {
+                            display: true,
+                            text: "Temperatura (ºC)"
+                        }
+                    }
+                }
+            }
+        });
+
+        function SaveNewSettings() {
+            var posix = document.getElementById("posix").value;
+            var apiKey = document.getElementById("WAPIKEY").value;
+            var place = document.getElementById("WPLACE").value;
+            var weather = document.getElementById("weather-enabled").checked;
+            var nightClock = document.getElementById("night-clock-enable").checked;
+            var randomColor = document.getElementById("random-color").checked;
+            var startHour = document.getElementById("start-hour").value;
+            var endHour = document.getElementById("end-hour").value;
+
+            var data =
+                "posix=" + encodeURIComponent(posix) +
+                "&maxbrightness=" + encodeURIComponent(document.getElementById("maxbrightness").value) +
+                "&language=" + encodeURIComponent(document.getElementById("language").value) +
+                "&weather=" + encodeURIComponent(weather) +
+                "&apikey=" + encodeURIComponent(apiKey) +
+                "&place=" + encodeURIComponent(place) +
+                "&nightclock=" + encodeURIComponent(nightClock) +
+                "&randomcolor=" + encodeURIComponent(randomColor) +
+                "&start=" + encodeURIComponent(startHour) +
+                "&end=" + encodeURIComponent(endHour);
+
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "/SaveNewSettings", true);
+            xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+            xhr.onload = function () {
+                if (xhr.status === 200) window.location.reload();
+                else alert("Erro ao guardar: " + xhr.responseText);
+            };
+            xhr.onerror = function () { alert("Erro de ligação ao guardar."); };
+            xhr.send(data);
+        }
+
+        function ESPReset() {
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "/ESPReset", true);
+            xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+            xhr.send();
+        }
+
+        function FactoryReset() {
+            var xhr = new XMLHttpRequest();
+            xhr.open("POST", "/FactoryReset", true);
+            xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+            xhr.send();
+        }
+    </script>
+</body>
+
+</html>
 )=====";
 
 const char ColorPickerPage[] PROGMEM = R"=====(
-<!doctype html><html lang=pt><head><meta charset=UTF-8><meta name=viewport content="width=device-width,initial-scale=1"><link rel=icon href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🖌️</text></svg>"><title>Seletor de cor</title><script src=iro.min.js></script><style>body{font-family:Arial,sans-serif;margin:0;padding:0;background-color:#f3f3f3}#container{max-width:900px;margin:50px auto;padding:20px;background-color:#fff;border-radius:10px;box-shadow:0 0 10px rgba(0,0,0,.5)}.pickers-wrapper{display:flex;gap:30px;justify-content:center;flex-wrap:wrap;margin-bottom:20px}.color-display-container{display:flex;flex-direction:column;padding:14px;border:1px solid #ccc;border-radius:8px;background:#fafafa}.color-display-title{font-weight:700;font-size:1.1em;margin-bottom:10px}.card-body{display:flex;flex-direction:row;gap:14px;align-items:flex-start}.card-left{display:flex;flex-direction:column;align-items:center;gap:8px}.color-display{width:64px;height:64px;border:1px solid #ccc;border-radius:5px;flex-shrink:0}.rgb-display{font-size:.78em;color:#444;text-align:center;white-space:nowrap}.color-buttons-row{display:grid;grid-template-columns:repeat(3,28px);gap:4px}.color-button{width:28px;height:28px;border:2px solid transparent;border-radius:4px;cursor:pointer;outline:0;transition:border-color .15s,transform .1s;font-size:.6em;font-weight:700;color:#333;padding:0}.color-button:hover{border-color:#007bff;transform:scale(1.12)}.iro-sub-container{flex-shrink:0}#backButton,#saveButton,.test-button{margin-top:8px;padding:8px 18px;border:none;border-radius:5px;background-color:#007bff;color:#fff;cursor:pointer;font-size:.95em}#backButton:hover,#saveButton:hover,.test-button:hover{background-color:#0056c7}#saveButton{display:block;margin:20px auto 10px;width:120px;padding:10px;font-size:1em}#backButton{margin-right:12px;width:40px;padding:8px 10px}#title-wrapper{display:flex;align-items:center;margin-bottom:24px}#title-wrapper h1{margin:0}#custom-text-field{text-align:center;color:#5c5c5c;margin-top:10px}</style></head><body><div id=container><div id=title-wrapper><button id=backButton onclick='window.location.href="/"'>&lt;</button><h1>Seletor de cor</h1></div><div class=pickers-wrapper><div class=color-display-container><div class=color-display-title>Base</div><div class=card-body><div class=card-left><div id=color-display-base class=color-display></div><div id=rgb-display-base class=rgb-display>RGB: (0, 0, 0)</div><div class=color-buttons-row><button class=color-button style=background-color:#fff;color:#999 onclick='setPickerColor("base","#FFFFFF")'>W</button> <button class=color-button style=background-color:red;color:#fff onclick='setPickerColor("base","#FF0000")'>R</button> <button class=color-button style=background-color:#0f0 onclick='setPickerColor("base","#00FF00")'>G</button> <button class=color-button style=background-color:#00f;color:#fff onclick='setPickerColor("base","#0000FF")'>B</button> <button class=color-button style=background-color:#ff0 onclick='setPickerColor("base","#FFFF00")'>Y</button> <button class=color-button style=background-color:#f0f;color:#fff onclick='setPickerColor("base","#FF00FF")'>P</button> <button class=color-button style=background-color:#0ff onclick='setPickerColor("base","#00FFFF")'>C</button> <button class=color-button style=background-color:#f80 onclick='setPickerColor("base","#FF8800")'>O</button> <button class=color-button style=background-color:#80f;color:#fff onclick='setPickerColor("base","#8800FF")'>V</button> <button class=color-button style=background-color:#0f8 onclick='setPickerColor("base","#00FF88")'>M</button> <button class=color-button style=background-color:#f08;color:#fff onclick='setPickerColor("base","#FF0088")'>K</button> <button class=color-button style=background-color:#888;color:#fff onclick='setPickerColor("base","#888888")'>Gr</button></div><button class=test-button onclick='testColor("base")'>Testar</button></div><div id=iro-base class=iro-sub-container></div></div></div><div class=color-display-container><div class=color-display-title>Night</div><div class=card-body><div class=card-left><div id=color-display-night class=color-display></div><div id=rgb-display-night class=rgb-display>RGB: (0, 0, 0)</div><div class=color-buttons-row><button class=color-button style=background-color:#fff;color:#999 onclick='setPickerColor("night","#FFFFFF")'>W</button> <button class=color-button style=background-color:red;color:#fff onclick='setPickerColor("night","#FF0000")'>R</button> <button class=color-button style=background-color:#0f0 onclick='setPickerColor("night","#00FF00")'>G</button> <button class=color-button style=background-color:#00f;color:#fff onclick='setPickerColor("night","#0000FF")'>B</button> <button class=color-button style=background-color:#ff0 onclick='setPickerColor("night","#FFFF00")'>Y</button> <button class=color-button style=background-color:#f0f;color:#fff onclick='setPickerColor("night","#FF00FF")'>P</button> <button class=color-button style=background-color:#0ff onclick='setPickerColor("night","#00FFFF")'>C</button> <button class=color-button style=background-color:#f80 onclick='setPickerColor("night","#FF8800")'>O</button> <button class=color-button style=background-color:#80f;color:#fff onclick='setPickerColor("night","#8800FF")'>V</button> <button class=color-button style=background-color:#0f8 onclick='setPickerColor("night","#00FF88")'>M</button> <button class=color-button style=background-color:#f08;color:#fff onclick='setPickerColor("night","#FF0088")'>K</button> <button class=color-button style=background-color:#888;color:#fff onclick='setPickerColor("night","#888888")'>Gr</button></div><button class=test-button onclick='testColor("night")'>Testar</button></div><div id=iro-night class=iro-sub-container></div></div></div></div><button id=saveButton onclick=SendColor()>Guardar</button><div id=custom-text-field>{{Custom-text}}</div></div><script>var maxbrightness="{{MAX_BRIGHTNESS}}";maxbrightness=parseInt(maxbrightness);var pickerBase=new iro.ColorPicker("#iro-base",{wheelLightness:!1,width:200,layout:[{component:iro.ui.Wheel},{component:iro.ui.Slider}],color:"#000000"});pickerBase.on("color:change",(function(e){e.value>maxbrightness&&(e.value=maxbrightness),document.getElementById("color-display-base").style.backgroundColor=e.hexString,updateRGBDisplay(e.rgb,"base")}));var pickerNight=new iro.ColorPicker("#iro-night",{wheelLightness:!1,width:200,layout:[{component:iro.ui.Wheel},{component:iro.ui.Slider}],color:"#000000"});function setPickerColor(e,o){"base"===e?pickerBase.color.set(o):pickerNight.color.set(o)}function updateRGBDisplay(e,o){document.getElementById("rgb-display-"+o).innerHTML=`RGB: (${e.r}, ${e.g}, ${e.b})`}function setCurrentColor(e,o){pickerBase.color.set(e),pickerNight.color.set(o)}function SendColor(){var e="Base_color="+pickerBase.color.hexString+"&Night_color="+pickerNight.color.hexString,o=new XMLHttpRequest;o.open("POST","/SaveColor",!0),o.setRequestHeader("Content-type","application/x-www-form-urlencoded"),o.send(e),console.log(e)}function testColor(e){var o="base"===e?pickerBase.color.hexString:pickerNight.color.hexString,r=new XMLHttpRequest;r.open("POST","/testColor",!0),r.setRequestHeader("Content-type","application/x-www-form-urlencoded"),r.send("type="+e+"&color="+o),console.log("type="+e+"&color="+o)}pickerNight.on("color:change",(function(e){e.value>maxbrightness&&(e.value=maxbrightness),document.getElementById("color-display-night").style.backgroundColor=e.hexString,updateRGBDisplay(e.rgb,"night")})),setCurrentColor("{{MAIN_COLOR}}","{{NIGHT_COLOR}}")</script></body></html>
+<!doctype html>
+<html lang="pt">
+    <head>
+        <meta charset="UTF-8" />
+        <meta name="viewport" content="width=device-width,initial-scale=1" />
+        <link
+            rel="icon"
+            href="data:image/svg+xml,<svg xmlns=%22http://www.w3.org/2000/svg%22 viewBox=%220 0 100 100%22><text y=%22.9em%22 font-size=%2290%22>🖌️</text></svg>"
+        />
+        <title>Seletor de cor</title>
+        <script src="iro.min.js"></script>
+        <style>
+            body {
+                font-family: Arial, sans-serif;
+                margin: 0;
+                padding: 0;
+                background-color: #f3f3f3;
+            }
+            #container {
+                max-width: 900px;
+                margin: 50px auto;
+                padding: 20px;
+                background-color: #fff;
+                border-radius: 10px;
+                box-shadow: 0 0 10px rgba(0, 0, 0, 0.5);
+            }
+            .pickers-wrapper {
+                display: flex;
+                gap: 30px;
+                justify-content: center;
+                flex-wrap: wrap;
+                margin-bottom: 20px;
+            }
+            .color-display-container {
+                display: flex;
+                flex-direction: column;
+                padding: 14px;
+                border: 1px solid #ccc;
+                border-radius: 8px;
+                background: #fafafa;
+            }
+            .color-display-title {
+                font-weight: bold;
+                font-size: 1.1em;
+                margin-bottom: 10px;
+            }
+            /* Row: left col (swatch + buttons) | right col (picker) */
+            .card-body {
+                display: flex;
+                flex-direction: row;
+                gap: 14px;
+                align-items: flex-start;
+            }
+            .card-left {
+                display: flex;
+                flex-direction: column;
+                align-items: center;
+                gap: 8px;
+            }
+            .color-display {
+                width: 64px;
+                height: 64px;
+                border: 1px solid #ccc;
+                border-radius: 5px;
+                flex-shrink: 0;
+            }
+            .rgb-display {
+                font-size: 0.78em;
+                color: #444;
+                text-align: center;
+                white-space: nowrap;
+            }
+            .color-buttons-row {
+                display: grid;
+                grid-template-columns: repeat(3, 28px);
+                gap: 4px;
+            }
+            .color-button {
+                width: 28px;
+                height: 28px;
+                border: 2px solid transparent;
+                border-radius: 4px;
+                cursor: pointer;
+                outline: none;
+                transition: border-color 0.15s, transform 0.1s;
+                font-size: 0.6em;
+                font-weight: bold;
+                color: #333;
+                padding: 0;
+            }
+            .color-button:hover {
+                border-color: #007bff;
+                transform: scale(1.12);
+            }
+            .iro-sub-container {
+                flex-shrink: 0;
+            }
+            .test-button, #saveButton, #backButton {
+                margin-top: 8px;
+                padding: 8px 18px;
+                border: none;
+                border-radius: 5px;
+                background-color: #007bff;
+                color: #fff;
+                cursor: pointer;
+                font-size: 0.95em;
+            }
+            .test-button:hover, #saveButton:hover, #backButton:hover {
+                background-color: #0056c7;
+            }
+            #saveButton {
+                display: block;
+                margin: 20px auto 10px;
+                width: 120px;
+                padding: 10px;
+                font-size: 1em;
+            }
+            #backButton {
+                margin-right: 12px;
+                width: 40px;
+                padding: 8px 10px;
+            }
+            #title-wrapper {
+                display: flex;
+                align-items: center;
+                margin-bottom: 24px;
+            }
+            #title-wrapper h1 {
+                margin: 0;
+            }
+            #custom-text-field {
+                text-align: center;
+                color: #5c5c5c;
+                margin-top: 10px;
+            }
+        </style>
+    </head>
+    <body>
+        <div id="container">
+            <div id="title-wrapper">
+                <button id="backButton" onclick="window.location.href='/'">&lt;</button>
+                <h1>Seletor de cor</h1>
+            </div>
+
+            <div class="pickers-wrapper">
+                <!-- BASE -->
+                <div class="color-display-container">
+                    <div class="color-display-title">Base</div>
+                    <div class="card-body">
+                        <div class="card-left">
+                            <div id="color-display-base" class="color-display"></div>
+                            <div id="rgb-display-base" class="rgb-display">RGB: (0, 0, 0)</div>
+                            <div class="color-buttons-row">
+                                <button class="color-button" style="background-color:#fff;color:#999" onclick="setPickerColor('base','#FFFFFF')">W</button>
+                                <button class="color-button" style="background-color:red;color:#fff" onclick="setPickerColor('base','#FF0000')">R</button>
+                                <button class="color-button" style="background-color:#00ff00" onclick="setPickerColor('base','#00FF00')">G</button>
+                                <button class="color-button" style="background-color:#0000ff;color:#fff" onclick="setPickerColor('base','#0000FF')">B</button>
+                                <button class="color-button" style="background-color:#ffff00" onclick="setPickerColor('base','#FFFF00')">Y</button>
+                                <button class="color-button" style="background-color:#ff00ff;color:#fff" onclick="setPickerColor('base','#FF00FF')">P</button>
+                                <button class="color-button" style="background-color:#00ffff" onclick="setPickerColor('base','#00FFFF')">C</button>
+                                <button class="color-button" style="background-color:#ff8800" onclick="setPickerColor('base','#FF8800')">O</button>
+                                <button class="color-button" style="background-color:#8800ff;color:#fff" onclick="setPickerColor('base','#8800FF')">V</button>
+                                <button class="color-button" style="background-color:#00ff88" onclick="setPickerColor('base','#00FF88')">M</button>
+                                <button class="color-button" style="background-color:#ff0088;color:#fff" onclick="setPickerColor('base','#FF0088')">K</button>
+                                <button class="color-button" style="background-color:#888;color:#fff" onclick="setPickerColor('base','#888888')">Gr</button>
+                            </div>
+                            <button class="test-button" onclick="testColor('base')">Testar</button>
+                        </div>
+                        <div id="iro-base" class="iro-sub-container"></div>
+                    </div>
+                </div>
+
+                <!-- NIGHT -->
+                <div class="color-display-container">
+                    <div class="color-display-title">Night</div>
+                    <div class="card-body">
+                        <div class="card-left">
+                            <div id="color-display-night" class="color-display"></div>
+                            <div id="rgb-display-night" class="rgb-display">RGB: (0, 0, 0)</div>
+                            <div class="color-buttons-row">
+                                <button class="color-button" style="background-color:#fff;color:#999" onclick="setPickerColor('night','#FFFFFF')">W</button>
+                                <button class="color-button" style="background-color:red;color:#fff" onclick="setPickerColor('night','#FF0000')">R</button>
+                                <button class="color-button" style="background-color:#00ff00" onclick="setPickerColor('night','#00FF00')">G</button>
+                                <button class="color-button" style="background-color:#0000ff;color:#fff" onclick="setPickerColor('night','#0000FF')">B</button>
+                                <button class="color-button" style="background-color:#ffff00" onclick="setPickerColor('night','#FFFF00')">Y</button>
+                                <button class="color-button" style="background-color:#ff00ff;color:#fff" onclick="setPickerColor('night','#FF00FF')">P</button>
+                                <button class="color-button" style="background-color:#00ffff" onclick="setPickerColor('night','#00FFFF')">C</button>
+                                <button class="color-button" style="background-color:#ff8800" onclick="setPickerColor('night','#FF8800')">O</button>
+                                <button class="color-button" style="background-color:#8800ff;color:#fff" onclick="setPickerColor('night','#8800FF')">V</button>
+                                <button class="color-button" style="background-color:#00ff88" onclick="setPickerColor('night','#00FF88')">M</button>
+                                <button class="color-button" style="background-color:#ff0088;color:#fff" onclick="setPickerColor('night','#FF0088')">K</button>
+                                <button class="color-button" style="background-color:#888;color:#fff" onclick="setPickerColor('night','#888888')">Gr</button>
+                            </div>
+                            <button class="test-button" onclick="testColor('night')">Testar</button>
+                        </div>
+                        <div id="iro-night" class="iro-sub-container"></div>
+                    </div>
+                </div>
+            </div>
+
+            <button id="saveButton" onclick="SendColor()">Guardar</button>
+            <div id="custom-text-field">{{Custom-text}}</div>
+        </div>
+
+        <script>
+            var maxbrightness = "{{MAX_BRIGHTNESS}}";
+            maxbrightness = parseInt(maxbrightness);
+
+            // --- Base picker ---
+            var pickerBase = new iro.ColorPicker("#iro-base", {
+                wheelLightness: false,
+                width: 200,
+                layout: [{ component: iro.ui.Wheel }, { component: iro.ui.Slider }],
+                color: "#000000",
+            });
+            pickerBase.on("color:change", function (color) {
+                document.getElementById("color-display-base").style.backgroundColor = color.hexString;
+                updateRGBDisplay(color.rgb, "base");
+            });
+
+            // --- Night picker ---
+            var pickerNight = new iro.ColorPicker("#iro-night", {
+                wheelLightness: false,
+                width: 200,
+                layout: [{ component: iro.ui.Wheel }, { component: iro.ui.Slider }],
+                color: "#000000",
+            });
+            pickerNight.on("color:change", function (color) {
+                document.getElementById("color-display-night").style.backgroundColor = color.hexString;
+                updateRGBDisplay(color.rgb, "night");
+            });
+
+            function setPickerColor(type, hex) {
+                if (type === 'base') pickerBase.color.set(hex);
+                else pickerNight.color.set(hex);
+            }
+
+            function updateRGBDisplay(rgb, type) {
+                document.getElementById("rgb-display-" + type).innerHTML =
+                    `RGB: (${rgb.r}, ${rgb.g}, ${rgb.b})`;
+            }
+
+            function setCurrentColor(baseColor, nightColor) {
+                pickerBase.color.set(baseColor);
+                pickerNight.color.set(nightColor);
+            }
+
+            function SendColor() {
+                var baseColor = pickerBase.color.hexString;
+                var nightColor = pickerNight.color.hexString;
+                var data = "Base_color=" + baseColor + "&Night_color=" + nightColor;
+                var xhr = new XMLHttpRequest();
+                xhr.open("POST", "/SaveColor", true);
+                xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+                xhr.onload = function () {
+                    if (xhr.status === 200) window.location.href = '/';
+                    else alert('Erro ao guardar: ' + xhr.responseText);
+                };
+                xhr.onerror = function () { alert('Erro de ligação ao guardar.'); };
+                xhr.send(data);
+                console.log(data);
+            }
+
+            function testColor(colorType) {
+                var rgbColor = colorType === "base" ? pickerBase.color.hexString : pickerNight.color.hexString;
+                var xhr = new XMLHttpRequest();
+                xhr.open("POST", "/testColor", true);
+                xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+                xhr.send("type=" + colorType + "&color=" + rgbColor);
+                console.log("type=" + colorType + "&color=" + rgbColor);
+            }
+
+            setCurrentColor("{{MAIN_COLOR}}", "{{NIGHT_COLOR}}");
+        </script>
+    </body>
+</html>
 )=====";
 
 const char TempPage[] PROGMEM = R"=====(

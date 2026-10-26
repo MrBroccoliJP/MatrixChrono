@@ -1,8 +1,8 @@
 /*
  * MatrixChrono - IoT Smart Home Clock System
  * Copyright (c) 2025 João Fernandes
- * 
- * This work is licensed under the Creative Commons Attribution-NonCommercial 
+ *
+ * This work is licensed under the Creative Commons Attribution-NonCommercial
  * 4.0 International License. To view a copy of this license, visit:
  * http://creativecommons.org/licenses/by-nc/4.0/
  */
@@ -41,9 +41,8 @@ Timezone country;
 
 #define PT_POSIX "WET0WEST,M3.5.0/1,M10.5.0/2"
 
-char* C_POSIX = PT_POSIX;
 
-const char* firmwareVersion = "5.60";
+const char* firmwareVersion = "5.61";
 
 
 Adafruit_NeoMatrix matrix = Adafruit_NeoMatrix(8, 8, 4, 1, PIN,
@@ -68,6 +67,10 @@ struct AppSettings {
 
   bool randomColor;
   bool weather;
+  bool nightClock;
+
+  char posix[96];
+  char apiKey[128];
 
   char city[32];
   char language[16];
@@ -79,6 +82,8 @@ struct AppSettings {
 };
 
 AppSettings settings;
+bool saveSettings(const AppSettings& s);
+bool validHtmlColor(const String& value);
 
 uint8_t red, green, blue;  //USED FOR THE RGB565TORGB FUNCTION
 
@@ -161,7 +166,7 @@ void setup() {
   //initialization
   matrix.begin();
   matrix.setTextWrap(false);
-  matrix.setBrightness(settings.maxbrightness);
+  matrix.setBrightness(75);
   matrix.fillScreen(0);
   matrix.setFont(&Normal);
   matrix.setTextSize(1);
@@ -307,7 +312,7 @@ void setup() {
 
 
   rtc.begin();
-  country.setPosix(C_POSIX);
+  country.setPosix(settings.posix);
 
 
   if (wifiConnected) {
@@ -363,6 +368,7 @@ void loop() {
     isNight = (currentTime >= nightStartTime) && (currentTime < nightEndTime);
   }
 
+  isNight = settings.nightClock && isNight;
   ClockMode newMode = isNight ? ClockMode::NIGHT : ClockMode::NORMAL;
 
   if (newMode != currentMode || !modeInitialized) {
@@ -1347,46 +1353,27 @@ void scrollText(String text, int speed) {
 }
 
 void serverSaveColor() {
-  if (server.hasArg("Base_color") && server.hasArg("Night_color")) {
-    String Base_color = server.arg("Base_color");
-    String Night_color = server.arg("Night_color");
-
-    int server_r = (int)strtol(&Base_color[1], NULL, 16) >> 16 & 0xFF;
-    int server_g = (int)strtol(&Base_color[1], NULL, 16) >> 8 & 0xFF;
-    int server_b = (int)strtol(&Base_color[1], NULL, 16) & 0xFF;
-
-    r = server_r;
-    g = server_g;
-    b = server_b;
-    maxChannelValue = max(max(r, g), b);  // Use max function directly for max RGB
-    if (settings.randomColor) {
-      targetR = targetB = targetG = 0;
-    }
-
-    interpolatedR = 0;  //this is used for the random color assignment
-    interpolatedG = 0;
-    interpolatedB = 0;
-    fadeStepR= double(r) / 25;
-    fadeStepG = double(g) / 25;
-    fadeStepB = double(b) / 25;
-    settings.mainColor = matrix.Color(r, g, b);
-
-    server_r = (int)strtol(&Night_color[1], NULL, 16) >> 16 & 0xFF;
-    server_g = (int)strtol(&Night_color[1], NULL, 16) >> 8 & 0xFF;
-    server_b = (int)strtol(&Night_color[1], NULL, 16) & 0xFF;
-
-    settings.nightColor = matrix.Color(server_r, server_g, server_b);
-
-    fadeOut(200);
-
-    server.send(200, "text/plain", "Color set successfully");
-    screenClockHour = -1;
-    screenClockMin = -1;
-    modeInitialized = false;
-
-  } else {
-    server.send(400, "text/plain", "Missing parameters");
+  if (!server.hasArg("Base_color") || !server.hasArg("Night_color") ||
+      !validHtmlColor(server.arg("Base_color")) || !validHtmlColor(server.arg("Night_color"))) {
+    server.send(400, "text/plain", "Expected Base_color and Night_color as #RRGGBB");
+    return;
   }
+  AppSettings candidate = settings;
+  unsigned long base = strtoul(server.arg("Base_color").c_str() + 1, nullptr, 16);
+  unsigned long night = strtoul(server.arg("Night_color").c_str() + 1, nullptr, 16);
+  candidate.mainColor = matrix.Color((base >> 16) & 255, (base >> 8) & 255, base & 255);
+  candidate.nightColor = matrix.Color((night >> 16) & 255, (night >> 8) & 255, night & 255);
+  if (!saveSettings(candidate)) {
+    server.send(500, "text/plain", "Failed to save colors to NVS");
+    return;
+  }
+  settings = candidate;
+  targetR = targetG = targetB = 0;
+  interpolatedR = interpolatedG = interpolatedB = 0;
+  fadeOut(200);
+  screenClockHour = screenClockMin = -1;
+  modeInitialized = false;
+  server.send(200, "text/plain", "Colors saved");
 }
 
 
@@ -1544,11 +1531,12 @@ void startWebServers() {
     page.replace("{{WiFi}}", WiFi.SSID());
     page.replace("{{IP}}", WiFi.localIP().toString());
     page.replace("{{MAX_BRIGHTNESS}}", String(settings.maxbrightness));
-    page.replace("{{POSIX}}", String(C_POSIX));
+    page.replace("{{LANGUAGE}}", escapeHtml(String(settings.language)));
+    page.replace("{{POSIX}}", escapeHtml(settings.posix));
     page.replace("{{NIGHTCLOCKSTART}}", String(settings.nightModeStartHour < 10 ? "0" + String(settings.nightModeStartHour) : String(settings.nightModeStartHour)) + ":" + String(settings.nightModeStartMin < 10 ? "0" + String(settings.nightModeStartMin) : String(settings.nightModeStartMin)));
     page.replace("{{NIGHTCLOCKEND}}", String(settings.nightModeEndHour < 10 ? "0" + String(settings.nightModeEndHour) : String(settings.nightModeEndHour)) + ":" + String(settings.nightModeEndMin < 10 ? "0" + String(settings.nightModeEndMin) : String(settings.nightModeEndMin)));
-    page.replace("{{MAIN_COLOR}}", "#" + String(RGB565toRGB888(settings.mainColor), HEX));
-    page.replace("{{NIGHT_COLOR}}", "#" + String(RGB565toRGB888(settings.nightColor), HEX));
+    page.replace("{{MAIN_COLOR}}", colorCss(settings.mainColor));
+    page.replace("{{NIGHT_COLOR}}", colorCss(settings.nightColor));
     page.replace("{{FIRMWAREVERSION}}", "V:" + String(firmwareVersion));
     page.replace("{{CURRENTHOUR}}", String(clockHour) + ":" + String(clockMin));
     page.replace("{{ezTime}}", country.dateTime());
@@ -1560,7 +1548,11 @@ void startWebServers() {
     page.replace("{{Y_SENSOR1DATA}}", formattedTempDataSensor1);
 
     page.replace("{{terminalOutput}}", formattedTerminalOutput);
-    page.replace("{{PLACE}}", settings.city);
+    page.replace("{{PLACE}}", escapeHtml(settings.city));
+    page.replace("{{WEATHERPLACE}}", escapeHtml(settings.city));
+    page.replace("{{WEATHERAPIKEY}}", escapeHtml(settings.apiKey));
+    page.replace("{{FONT}}", "Square");
+    page.replace("{{NIGHTCLOCKCHECKBOX}}", settings.nightClock ? "checked" : "");
     if (settings.randomColor) {
       page.replace("{{RANDOMCOLORCHECKBOX}}", "checked ");
     } else {
@@ -1623,8 +1615,8 @@ void startWebServers() {
     float pageMaxBrightness = (float)settings.maxbrightness * 0.39;  // 100/255 value approximated
     page.replace("{{CUSTOM_TEXT}}", "V:" + String(firmwareVersion) + "<br>João Fernandes");
     page.replace("{{MAX_BRIGHTNESS}}", String(pageMaxBrightness));
-    page.replace("{{MAIN_COLOR}}", "#" + String(RGB565toRGB888(settings.mainColor), HEX));
-    page.replace("{{NIGHT_COLOR}}", "#" + String(RGB565toRGB888(settings.nightColor), HEX));
+    page.replace("{{MAIN_COLOR}}", colorCss(settings.mainColor));
+    page.replace("{{NIGHT_COLOR}}", colorCss(settings.nightColor));
     server.send(200, "text/html", page);
   });
 
@@ -1667,7 +1659,7 @@ void getWeather() {
   HTTPClient http;  // Object of class HTTPClient
   http.useHTTP10(true);
 
-  String url = "http://api.weatherapi.com/v1/forecast.json?key=" + APIKEY + "&q=" + settings.city + "&days=1&aqi=no&alerts=no&lang=" + settings.language;
+  String url = "http://api.weatherapi.com/v1/forecast.json?key=" + String(settings.apiKey) + "&q=" + settings.city + "&days=1&aqi=no&alerts=no&lang=" + settings.language;
   if (weatherHour == 23) {
     url += "&hour=23";
   } else {
@@ -1739,6 +1731,11 @@ void getWeather() {
         sunrise_h = 0;  // Convert midnight (12 AM) to 00 hours
       }
 
+      if (sunrise_h == 0 && sunrise_m == 0) {
+        sunrise_h = 7;
+        sunrise_m = 44;
+      }
+
       // Print the results
       terminalOutput(forecast_time);
       terminalOutput(weather_str);
@@ -1750,47 +1747,144 @@ void getWeather() {
 }
 
 
+String escapeHtml(String value) {
+  value.replace("&", "&amp;");
+  value.replace("\"", "&quot;");
+  value.replace("<", "&lt;");
+  value.replace(">", "&gt;");
+  value.replace("'", "&#39;");
+  return value;
+}
+
+String colorCss(uint16_t color) {
+  char value[8];
+  snprintf(value, sizeof(value), "#%06lx", (unsigned long)RGB565toRGB888(color));
+  return String(value);
+}
+
+bool settingEnabled(const String& value) {
+  return value == "true" || value == "1" || value == "on";
+}
+
+bool validUnsignedSetting(const String& value, unsigned long maximum) {
+  if (value.length() == 0 || value.length() > 5) return false;
+  for (size_t i = 0; i < value.length(); ++i) {
+    if (value[i] < '0' || value[i] > '9') return false;
+  }
+  return strtoul(value.c_str(), nullptr, 10) <= maximum;
+}
+
+bool validSettingTime(const String& value) {
+  return value.length() == 5 && value[2] == ':' &&
+         validUnsignedSetting(value.substring(0, 2), 23) &&
+         validUnsignedSetting(value.substring(3, 5), 59);
+}
+
+bool validHtmlColor(const String& value) {
+  if (value.length() != 7 || value[0] != '#') return false;
+  for (size_t i = 1; i < 7; ++i) {
+    char c = value[i];
+    if (!((c >= '0' && c <= '9') || (c >= 'a' && c <= 'f') || (c >= 'A' && c <= 'F'))) return false;
+  }
+  return true;
+}
+
+bool validateSettingsRequest() {
+  const char* names[] = {"posix", "apikey", "place", "language"};
+  const size_t capacities[] = {sizeof(settings.posix), sizeof(settings.apiKey), sizeof(settings.city), sizeof(settings.language)};
+  for (size_t i = 0; i < 4; ++i) {
+    if (server.hasArg(names[i]) && (server.arg(names[i]).length() >= capacities[i] ||
+        (i != 1 && server.arg(names[i]).length() == 0))) {
+      server.send(400, "text/plain", String("Invalid or too long: ") + names[i]);
+      return false;
+    }
+  }
+  const char* numericNames[] = {"maxbrightness", "mainColor", "nightColor"};
+  for (size_t i = 0; i < 3; ++i) {
+    if (server.hasArg(numericNames[i]) && !validUnsignedSetting(server.arg(numericNames[i]), i == 0 ? 255 : 65535)) {
+      server.send(400, "text/plain", "Invalid numeric setting");
+      return false;
+    }
+  }
+  const char* times[] = {"start", "end"};
+  for (const char* name : times) {
+    if (server.hasArg(name) && !validSettingTime(server.arg(name))) {
+      server.send(400, "text/plain", "Invalid time; expected HH:MM");
+      return false;
+    }
+  }
+  const char* flags[] = {"weather", "randomcolor", "nightclock"};
+  for (const char* name : flags) {
+    if (!server.hasArg(name)) continue;
+    String value = server.arg(name);
+    if (!(settingEnabled(value) || value == "false" || value == "0" || value == "off")) {
+      server.send(400, "text/plain", "Invalid boolean setting");
+      return false;
+    }
+  }
+  return true;
+}
+
 void handleSaveNewSettings() {
+  AppSettings candidate = settings;
+  if (!validateSettingsRequest()) return;
+  if (server.hasArg("posix")) {
+    strlcpy(candidate.posix, server.arg("posix").c_str(), sizeof(candidate.posix));
+  }
+  if (server.hasArg("apikey")) {
+    strlcpy(candidate.apiKey, server.arg("apikey").c_str(), sizeof(candidate.apiKey));
+  }
   if (server.hasArg("maxbrightness")) {
-    settings.maxbrightness = (uint8_t)server.arg("maxbrightness").toInt();
+    candidate.maxbrightness = (uint8_t)server.arg("maxbrightness").toInt();
   }
 
   if (server.hasArg("mainColor")) {
-    settings.mainColor = (uint16_t)strtoul(server.arg("mainColor").c_str(), nullptr, 0);
+    candidate.mainColor = (uint16_t)strtoul(server.arg("mainColor").c_str(), nullptr, 10);
   }
 
   if (server.hasArg("nightColor")) {
-    settings.nightColor = (uint16_t)strtoul(server.arg("nightColor").c_str(), nullptr, 0);
+    candidate.nightColor = (uint16_t)strtoul(server.arg("nightColor").c_str(), nullptr, 10);
   }
 
   if (server.hasArg("place")) {
-    strlcpy(settings.city, server.arg("place").c_str(), sizeof(settings.city));
+    strlcpy(candidate.city, server.arg("place").c_str(), sizeof(candidate.city));
   }
 
   if (server.hasArg("language")) {
-    strlcpy(settings.language, server.arg("language").c_str(), sizeof(settings.language));
+    strlcpy(candidate.language, server.arg("language").c_str(), sizeof(candidate.language));
   }
 
-  settings.weather = server.hasArg("weather");
-  settings.randomColor = server.hasArg("randomcolor");
+  if (server.hasArg("weather")) candidate.weather = settingEnabled(server.arg("weather"));
+  if (server.hasArg("randomcolor")) candidate.randomColor = settingEnabled(server.arg("randomcolor"));
+  if (server.hasArg("nightclock")) candidate.nightClock = settingEnabled(server.arg("nightclock"));
 
   if (server.hasArg("start")) {
     String start = server.arg("start");
     if (start.length() >= 5) {
-      settings.nightModeStartHour = start.substring(0, 2).toInt();
-      settings.nightModeStartMin = start.substring(3, 5).toInt();
+      candidate.nightModeStartHour = start.substring(0, 2).toInt();
+      candidate.nightModeStartMin = start.substring(3, 5).toInt();
     }
   }
 
   if (server.hasArg("end")) {
     String end = server.arg("end");
     if (end.length() >= 5) {
-      settings.nightModeEndHour = end.substring(0, 2).toInt();
-      settings.nightModeEndMin = end.substring(3, 5).toInt();
+      candidate.nightModeEndHour = end.substring(0, 2).toInt();
+      candidate.nightModeEndMin = end.substring(3, 5).toInt();
     }
   }
 
-  saveSettings(settings);
+  if (!saveSettings(candidate)) {
+    server.send(500, "text/plain", "Failed to save settings to NVS");
+    return;
+  }
+  settings = candidate;
+  country.setPosix(settings.posix);
+  LastRTCSyncTime = -1;
+  last_weather_update_hour = 25;
+  modeInitialized = false;
+  screenClockHour = -1;
+  screenClockMin = -1;
 
   terminalOutput("Settings updated from Web UI and saved to NVS");
   server.send(200, "text/plain", "OK");
@@ -1811,6 +1905,9 @@ void setDefaultSettings(AppSettings& s) {
 
   s.randomColor = true;
   s.weather = true;
+  s.nightClock = true;
+  strlcpy(s.posix, PT_POSIX, sizeof(s.posix));
+  strlcpy(s.apiKey, String(APIKEY).c_str(), sizeof(s.apiKey));
 
   strlcpy(s.city, "Aveiro,Portugal", sizeof(s.city));
   strlcpy(s.language, "en", sizeof(s.language));
@@ -1821,31 +1918,48 @@ void setDefaultSettings(AppSettings& s) {
   s.nightModeEndMin = 30;
 }
 
-void saveSettings(const AppSettings& s) {
-  preferences.begin("matrixcfg", false);
+bool saveSettings(const AppSettings& s) {
+  if (!preferences.begin("matrixcfg", false)) {
+    terminalOutput("Failed to open settings NVS for writing");
+    return false;
+  }
+  bool ok = true;
 
-  preferences.putBool("hasInit", true);
 
-  preferences.putUChar("maxbright", s.maxbrightness);
-  preferences.putUShort("mainColor", s.mainColor);
-  preferences.putUShort("nightColor", s.nightColor);
+  ok = (preferences.putUChar("maxbright", s.maxbrightness) > 0) && ok;
+  ok = (preferences.putUShort("mainColor", s.mainColor) > 0) && ok;
+  ok = (preferences.putUShort("nightColor", s.nightColor) > 0) && ok;
 
-  preferences.putBool("randColor", s.randomColor);
-  preferences.putBool("weather", s.weather);
+  ok = (preferences.putBool("randColor", s.randomColor) > 0) && ok;
+  ok = (preferences.putBool("weather", s.weather) > 0) && ok;
+  ok = (preferences.putBool("nightClock", s.nightClock) > 0) && ok;
+  preferences.putString("posix", s.posix);
+  ok = (preferences.isKey("posix") && preferences.getString("posix") == String(s.posix)) && ok;
+  preferences.putString("apiKey", s.apiKey);
+  ok = (preferences.isKey("apiKey") && preferences.getString("apiKey") == String(s.apiKey)) && ok;
 
   preferences.putString("city", s.city);
+  ok = (preferences.isKey("city") && preferences.getString("city") == String(s.city)) && ok;
   preferences.putString("lang", s.language);
+  ok = (preferences.isKey("lang") && preferences.getString("lang") == String(s.language)) && ok;
 
-  preferences.putUChar("nm_st_h", s.nightModeStartHour);
-  preferences.putUChar("nm_st_m", s.nightModeStartMin);
-  preferences.putUChar("nm_en_h", s.nightModeEndHour);
-  preferences.putUChar("nm_en_m", s.nightModeEndMin);
+  ok = (preferences.putUChar("nm_st_h", s.nightModeStartHour) > 0) && ok;
+  ok = (preferences.putUChar("nm_st_m", s.nightModeStartMin) > 0) && ok;
+  ok = (preferences.putUChar("nm_en_h", s.nightModeEndHour) > 0) && ok;
+  ok = (preferences.putUChar("nm_en_m", s.nightModeEndMin) > 0) && ok;
 
+  if (ok) ok = preferences.putBool("hasInit", true) > 0;
   preferences.end();
+  if (!ok) terminalOutput("Failed to save all settings to NVS");
+  return ok;
 }
 
 void loadSettings(AppSettings& s) {
-  preferences.begin("matrixcfg", true);
+  setDefaultSettings(s);
+  if (!preferences.begin("matrixcfg", true)) {
+    saveSettings(s);
+    return;
+  }
 
   bool hasInit = preferences.getBool("hasInit", false);
 
@@ -1862,6 +1976,9 @@ void loadSettings(AppSettings& s) {
 
   s.randomColor = preferences.getBool("randColor", true);
   s.weather = preferences.getBool("weather", true);
+  s.nightClock = preferences.getBool("nightClock", true);
+  strlcpy(s.posix, preferences.getString("posix", PT_POSIX).c_str(), sizeof(s.posix));
+  strlcpy(s.apiKey, preferences.getString("apiKey", String(APIKEY)).c_str(), sizeof(s.apiKey));
 
   String cidadeTmp = preferences.getString("city", "Aveiro,Portugal");
   String langTmp = preferences.getString("lang", "en");

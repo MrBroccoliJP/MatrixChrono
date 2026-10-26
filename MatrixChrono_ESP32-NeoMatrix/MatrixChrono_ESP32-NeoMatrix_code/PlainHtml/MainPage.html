@@ -188,20 +188,17 @@
                         onclick="window.open('https://github.com/ropg/ezTime?tab=readme-ov-file#timezones-1', '_blank')">
                         ?
                     </button>
-                    <input type="text" id="posix" value="{{POSIX}}">
+                    <input type="text" id="posix" maxlength="95" value="{{POSIX}}">
                 </label>
 
                 <label for="brightness-button">
                     <strong>🔆 Brilho</strong> (máximo):
-                    <button type="button" id="brightness-button"
-                        onclick="window.location.href='/CalibrateMaxBrightness'">
-                        🔦 Calibrar
-                    </button>
+                    <input type="number" id="maxbrightness" min="0" max="255" value="{{MAX_BRIGHTNESS}}">
                 </label>
 
                 <label for="letter-font">
                     <strong>🗛 Tipo de letra:</strong>
-                    <select id="letter-font" class="select">
+                    <select id="letter-font" class="select" disabled title="Fonte fixa do firmware">
                         <option value="{{FONT}}">{{FONT}}</option>
                     </select>
                 </label>
@@ -213,14 +210,15 @@
                     <input type="checkbox" id="weather-enabled" name="weather-enabled" {{WEATHERCHECKBOX}}>
                 </p>
 
+                <label for="language">Idioma: <input type="text" id="language" maxlength="15" value="{{LANGUAGE}}"></label>
                 <label for="WAPIKEY">
                     <strong>🔑 API KEY:</strong>
-                    <input type="text" id="WAPIKEY" value="{{WEATHERAPIKEY}}">
+                    <input type="text" id="WAPIKEY" maxlength="127" value="{{WEATHERAPIKEY}}">
                 </label>
 
                 <label for="WPLACE">
                     <strong>🗺️ Região:</strong>
-                    <input type="text" id="WPLACE" value="{{WEATHERPLACE}}">
+                    <input type="text" id="WPLACE" maxlength="31" value="{{WEATHERPLACE}}">
                 </label>
 
                 <hr>
@@ -244,8 +242,8 @@
 
                 <p>
                     <strong>🎨 Cor do relógio:</strong>
-                    <span class="color-box" style="background-color: {{MAINCOLOR}};"></span>
-                    <span class="color-box" style="background-color: {{NIGHTCOLOR}};"></span>
+                    <span class="color-box" style="background-color: {{MAIN_COLOR}};"></span>
+                    <span class="color-box" style="background-color: {{NIGHT_COLOR}};"></span>
 
                     <strong>🎲 Cor aleatória:</strong>
                     <input type="checkbox" id="random-color" name="random-color" {{RANDOMCOLORCHECKBOX}}>
@@ -309,7 +307,6 @@
 
         function SaveNewSettings() {
             var posix = document.getElementById("posix").value;
-            var font = document.getElementById("letter-font").value;
             var apiKey = document.getElementById("WAPIKEY").value;
             var place = document.getElementById("WPLACE").value;
             var weather = document.getElementById("weather-enabled").checked;
@@ -320,7 +317,8 @@
 
             var data =
                 "posix=" + encodeURIComponent(posix) +
-                "&font=" + encodeURIComponent(font) +
+                "&maxbrightness=" + encodeURIComponent(document.getElementById("maxbrightness").value) +
+                "&language=" + encodeURIComponent(document.getElementById("language").value) +
                 "&weather=" + encodeURIComponent(weather) +
                 "&apikey=" + encodeURIComponent(apiKey) +
                 "&place=" + encodeURIComponent(place) +
@@ -332,9 +330,12 @@
             var xhr = new XMLHttpRequest();
             xhr.open("POST", "/SaveNewSettings", true);
             xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+            xhr.onload = function () {
+                if (xhr.status === 200) window.location.reload();
+                else alert("Erro ao guardar: " + xhr.responseText);
+            };
+            xhr.onerror = function () { alert("Erro de ligação ao guardar."); };
             xhr.send(data);
-
-            console.log(data);
         }
 
         function ESPReset() {

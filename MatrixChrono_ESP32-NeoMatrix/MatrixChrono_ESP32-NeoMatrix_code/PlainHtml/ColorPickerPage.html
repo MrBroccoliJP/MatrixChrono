@@ -214,7 +214,6 @@
                 color: "#000000",
             });
             pickerBase.on("color:change", function (color) {
-                if (color.value > maxbrightness) color.value = maxbrightness;
                 document.getElementById("color-display-base").style.backgroundColor = color.hexString;
                 updateRGBDisplay(color.rgb, "base");
             });
@@ -227,7 +226,6 @@
                 color: "#000000",
             });
             pickerNight.on("color:change", function (color) {
-                if (color.value > maxbrightness) color.value = maxbrightness;
                 document.getElementById("color-display-night").style.backgroundColor = color.hexString;
                 updateRGBDisplay(color.rgb, "night");
             });
@@ -254,6 +252,11 @@
                 var xhr = new XMLHttpRequest();
                 xhr.open("POST", "/SaveColor", true);
                 xhr.setRequestHeader("Content-type", "application/x-www-form-urlencoded");
+                xhr.onload = function () {
+                    if (xhr.status === 200) window.location.href = '/';
+                    else alert('Erro ao guardar: ' + xhr.responseText);
+                };
+                xhr.onerror = function () { alert('Erro de ligação ao guardar.'); };
                 xhr.send(data);
                 console.log(data);
             }
